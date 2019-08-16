@@ -33,7 +33,7 @@ as pre-configured templetes
 
 5.THEN GO TO THE DIRECTORY AND GIVE EXECUTAL PERMISSONS TO requirements.sh)
 
-6.Make Sure You Login As A root
+6.Make Sure You Login As A root Not Needed If You are in termux
 
 7. Then Type ./requirements.sh
 
