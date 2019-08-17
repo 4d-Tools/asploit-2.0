@@ -45,7 +45,7 @@ as pre-configured templetes
 
 1.You Need To Forward Your Port to deliver the phishing page to someone in localserver or other
 
-2.TO PORT FORWARD SIMPLE MAKE A NEW TAB GO TO ASPLOIT DIRECTORY AND TYPE asploit.py then choose 5 and then and then choose 1 Serveo.net as it not support Ngrok but it will come in next update share the Serveo generated link to VICTIM!!
+2.TO PORT FORWARD SIMPLE MAKE A NEW TAB GO TO ASPLOIT DIRECTORY AND TYPE asploit.py then choose 5 and then and then choose 1 Serveo.net or 2 ngrok  But I prefered To Use 1.serveo net
 
 3.TO VIEW TO HACKED PASSOWRDS SIMPLE STOP THE PHP & SERVEO SERVER AND GO to main/sites/<your site's name> 
 
