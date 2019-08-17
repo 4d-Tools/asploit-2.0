@@ -9,4 +9,6 @@ stable realease
 2.Bugs Fixes:)
 
 
-# waiting for more issues
+# hot fix [17/9/19]
+
+1.Fix A critical Issue of requirements.sh not installing
