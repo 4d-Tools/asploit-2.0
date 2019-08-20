@@ -12,3 +12,10 @@ stable realease
 # hot fix [17/9/19]
 
 1.Fix A critical Issue of requirements.sh not installing
+ 
+# Big Update [20/9/19]
+
+1.added sqlmap
+2.bugs fixes
+3.requirements.sh change to installer.sh
+4.Required mandatry install of installer.sh
