@@ -17,9 +17,9 @@ as pre-configured templetes
 
 5.IT SUPPORTS SPOOFING WITH  REDIECTION WITH JS HTML CSS IMAGE REPLACEMENT ATTACKS
 
-6.IT HAS PRE-INSTALLED NGROK ON IT (COMING IN NEXT VERSION!!)
+6.IT HAS PRE-INSTALLED NGROK And SQLMAP ON IT 
 
-7.IT SIZE IS NOW 15.03 MB AS IT CONTAINS NG-ROK BUILT IN
+7.IT SIZE IS NOW 22.00 MB AS IT CONTAINS NG-ROK BUILT IN
 
 # INSTALLTION INSTRUCTIONS
 
@@ -35,7 +35,7 @@ as pre-configured templetes
 
 6.Make Sure You Login As A root Not Needed If You are in termux
 
-7. Then Type ./requirements.sh
+7. Then Type ./installer.sh
 
 8.after installing the requirements give EXECUTAL PERMISSONS to asploit.py with chmod +x asploit.py
 
@@ -43,11 +43,14 @@ as pre-configured templetes
 
 # Developer Notes
 
+
 1.You Need To Forward Your Port to deliver the phishing page to someone in localserver or other
 
 2.TO PORT FORWARD SIMPLE MAKE A NEW TAB GO TO ASPLOIT DIRECTORY AND TYPE asploit.py then choose 5 and then and then choose 1 Serveo.net or 2 ngrok  But I prefered To Use 1.serveo net
 
 3.TO VIEW TO HACKED PASSOWRDS SIMPLE STOP THE PHP & SERVEO SERVER AND GO to main/sites/<your site's name> 
+
+4.pls run the installer.sh
 
 # HOW TO SHOW PASSWORDS
 
