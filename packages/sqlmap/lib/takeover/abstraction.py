@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -9,7 +9,6 @@ from __future__ import print_function
 
 import sys
 
-from extra.safe2bin.safe2bin import safechardecode
 from lib.core.common import Backend
 from lib.core.common import dataToStdout
 from lib.core.common import getSQLSnippet
@@ -17,6 +16,7 @@ from lib.core.common import isStackingAvailable
 from lib.core.common import readInput
 from lib.core.convert import getUnicode
 from lib.core.data import conf
+from lib.core.data import kb
 from lib.core.data import logger
 from lib.core.enums import AUTOCOMPLETE_TYPE
 from lib.core.enums import DBMS
@@ -28,6 +28,7 @@ from lib.request import inject
 from lib.takeover.udf import UDF
 from lib.takeover.web import Web
 from lib.takeover.xp_cmdshell import XP_cmdshell
+from lib.utils.safe2bin import safechardecode
 from thirdparty.six.moves import input as _input
 
 class Abstraction(Web, UDF, XP_cmdshell):
@@ -48,7 +49,7 @@ class Abstraction(Web, UDF, XP_cmdshell):
         if Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
             self.copyExecCmd(cmd)
 
-        elif self.webBackdoorUrl and not isStackingAvailable():
+        elif self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             self.webBackdoorRunCmd(cmd)
 
         elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
@@ -67,7 +68,7 @@ class Abstraction(Web, UDF, XP_cmdshell):
         if Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
             retVal = self.copyExecCmd(cmd)
 
-        elif self.webBackdoorUrl and not isStackingAvailable():
+        elif self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             retVal = self.webBackdoorRunCmd(cmd)
 
         elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
@@ -104,7 +105,7 @@ class Abstraction(Web, UDF, XP_cmdshell):
             self.execCmd(cmd)
 
     def shell(self):
-        if self.webBackdoorUrl and not isStackingAvailable():
+        if self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             infoMsg = "calling OS shell. To quit type "
             infoMsg += "'x' or 'q' and press ENTER"
             logger.info(infoMsg)

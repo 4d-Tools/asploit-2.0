@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -24,6 +24,7 @@ from lib.core.common import getTechniqueData
 from lib.core.common import hashDBRetrieve
 from lib.core.common import hashDBWrite
 from lib.core.common import initTechnique
+from lib.core.common import isDigit
 from lib.core.common import isNoneValue
 from lib.core.common import isNumPosStrValue
 from lib.core.common import isTechniqueAvailable
@@ -104,12 +105,14 @@ def _goInference(payload, expression, charsetType=None, firstChar=None, lastChar
         if (conf.eta or conf.threads > 1) and Backend.getIdentifiedDbms() and not re.search(r"(COUNT|LTRIM)\(", expression, re.I) and not (timeBasedCompare and not kb.forceThreads):
 
             if field and re.search(r"\ASELECT\s+DISTINCT\((.+?)\)\s+FROM", expression, re.I):
-                expression = "SELECT %s FROM (%s)" % (field, expression)
+                if Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL, DBMS.MONETDB, DBMS.VERTICA, DBMS.CRATEDB, DBMS.CUBRID):
+                    alias = randomStr(lowercase=True, seed=hash(expression))
+                    expression = "SELECT %s FROM (%s)" % (field if '.' not in field else re.sub(r".+\.", "%s." % alias, field), expression)  # Note: MonetDB as a prime example
+                    expression += " AS %s" % alias
+                else:
+                    expression = "SELECT %s FROM (%s)" % (field, expression)
 
-                if Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
-                    expression += " AS %s" % randomStr(lowercase=True, seed=hash(expression))
-
-            if field and conf.hexConvert or conf.binaryFields and field in conf.binaryFields.split(','):
+            if field and conf.hexConvert or conf.binaryFields and field in conf.binaryFields:
                 nulledCastedField = agent.nullAndCastField(field)
                 injExpression = expression.replace(field, nulledCastedField, 1)
             else:
@@ -235,7 +238,7 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
                             elif choice == 'Q':
                                 raise SqlmapUserQuitException
 
-                            elif choice.isdigit() and int(choice) > 0 and int(choice) <= count:
+                            elif isDigit(choice) and int(choice) > 0 and int(choice) <= count:
                                 stopLimit = int(choice)
 
                                 infoMsg = "sqlmap is now going to retrieve the "
@@ -246,7 +249,7 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
                                 message = "how many? "
                                 stopLimit = readInput(message, default="10")
 
-                                if not stopLimit.isdigit():
+                                if not isDigit(stopLimit):
                                     errMsg = "invalid choice"
                                     logger.error(errMsg)
 
@@ -261,7 +264,7 @@ def _goInferenceProxy(expression, fromUser=False, batch=False, unpack=True, char
 
                                 return None
 
-                    elif count and not count.isdigit():
+                    elif count and not isDigit(count):
                         warnMsg = "it was not possible to count the number "
                         warnMsg += "of entries for the SQL query provided. "
                         warnMsg += "sqlmap will assume that it returns only "
@@ -409,6 +412,12 @@ def getValue(expression, blind=True, union=True, error=True, time=True, fromUser
                     kb.forcePartialUnion = kb.injection.data[PAYLOAD.TECHNIQUE.UNION].vector[8]
                     fallback = not expected and kb.injection.data[PAYLOAD.TECHNIQUE.UNION].where == PAYLOAD.WHERE.ORIGINAL and not kb.forcePartialUnion
 
+                    if expected == EXPECTED.BOOL:
+                        # Note: some DBMSes (e.g. Altibase) don't support implicit conversion of boolean check result during concatenation with prefix and suffix (e.g. 'qjjvq'||(1=1)||'qbbbq')
+
+                        if not any(_ in forgeCaseExpression for _ in ("SELECT", "CASE")):
+                            forgeCaseExpression = "(CASE WHEN (%s) THEN '1' ELSE '0' END)" % forgeCaseExpression
+
                     try:
                         value = _goUnion(forgeCaseExpression if expected == EXPECTED.BOOL else query, unpack, dump)
                     except SqlmapConnectionException:
@@ -490,10 +499,10 @@ def getValue(expression, blind=True, union=True, error=True, time=True, fromUser
 
     kb.safeCharEncode = False
 
-    if not any((kb.testMode, conf.dummy, conf.offline)) and value is None and Backend.getDbms() and conf.dbmsHandler and not conf.noCast and not conf.hexConvert:
+    if not any((kb.testMode, conf.dummy, conf.offline, conf.noCast, conf.hexConvert)) and value is None and Backend.getDbms() and conf.dbmsHandler and kb.fingerprinted:
         warnMsg = "in case of continuous data retrieval problems you are advised to try "
         warnMsg += "a switch '--no-cast' "
-        warnMsg += "or switch '--hex'" if Backend.getIdentifiedDbms() not in (DBMS.ACCESS, DBMS.FIREBIRD) else ""
+        warnMsg += "or switch '--hex'" if hasattr(queries[Backend.getIdentifiedDbms()], "hex") else ""
         singleTimeWarnMessage(warnMsg)
 
     # Dirty patch (safe-encoded unicode characters)

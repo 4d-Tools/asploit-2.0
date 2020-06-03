@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -10,7 +10,9 @@ import os
 from lib.core.common import Backend
 from lib.core.common import checkFile
 from lib.core.common import decloakToTemp
+from lib.core.common import flattenValue
 from lib.core.common import isListLike
+from lib.core.common import isNoneValue
 from lib.core.common import isStackingAvailable
 from lib.core.common import randomStr
 from lib.core.data import kb
@@ -104,6 +106,9 @@ class Takeover(GenericTakeover):
             output = inject.getValue(query, resumeValue=False)
 
             if isListLike(output):
+                output = flattenValue(output)
+
+            if not isNoneValue(output):
                 output = os.linesep.join(output)
 
             self._cleanupCmd = "DROP TABLE %s" % self.cmdTblName

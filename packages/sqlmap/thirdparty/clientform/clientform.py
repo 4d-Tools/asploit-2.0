@@ -227,6 +227,9 @@ def unescape(data, entities, encoding=DEFAULT_ENCODING):
     if data is None or "&" not in data:
         return data
 
+    if isinstance(data, six.string_types):
+        encoding = None
+
     def replace_entities(match, entities=entities, encoding=encoding):
         ent = match.group()
         if ent[1] == "#":
@@ -234,9 +237,9 @@ def unescape(data, entities, encoding=DEFAULT_ENCODING):
 
         repl = entities.get(ent)
         if repl is not None:
-            if type(repl) != type(""):
+            if hasattr(repl, "decode") and encoding is not None:
                 try:
-                    repl = repl.encode(encoding)
+                    repl = repl.decode(encoding)
                 except UnicodeError:
                     repl = ent
         else:
@@ -252,15 +255,11 @@ def unescape_charref(data, encoding):
         name, base= name[1:], 16
     elif not name.isdigit():
         base = 16
-    uc = _unichr(int(name, base))
-    if encoding is None:
-        return uc
-    else:
-        try:
-            repl = uc.encode(encoding)
-        except UnicodeError:
-            repl = "&#%s;" % data
-        return repl
+
+    try:
+        return _unichr(int(name, base))
+    except:
+        return data
 
 def get_entitydefs():
     from codecs import latin_1_decode
@@ -278,7 +277,6 @@ def get_entitydefs():
         for name, codepoint in _html_entities.name2codepoint.items():
             entitydefs["&%s;" % name] = _unichr(codepoint)
     return entitydefs
-
 
 def issequence(x):
     try:
@@ -711,7 +709,7 @@ class _AbstractFormParser:
                 data = data[1:]
             map[key] = data
         else:
-            map[key] = (map[key].decode("utf8") if isinstance(map[key], six.binary_type) else map[key]) + data
+            map[key] = (map[key].decode("utf8", "replace") if isinstance(map[key], six.binary_type) else map[key]) + data
 
     def do_button(self, attrs):
         debug("%s", attrs)

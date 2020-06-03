@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -42,9 +42,21 @@ class DBMS(object):
     PGSQL = "PostgreSQL"
     SQLITE = "SQLite"
     SYBASE = "Sybase"
+    INFORMIX = "Informix"
     HSQLDB = "HSQLDB"
     H2 = "H2"
-    INFORMIX = "Informix"
+    MONETDB = "MonetDB"
+    DERBY = "Apache Derby"
+    VERTICA = "Vertica"
+    MCKOI = "Mckoi"
+    PRESTO = "Presto"
+    ALTIBASE = "Altibase"
+    MIMERSQL = "MimerSQL"
+    CRATEDB = "CrateDB"
+    CUBRID = "Cubrid"
+    CACHE = "InterSystems Cache"
+    EXTREMEDB = "eXtremeDB"
+    FRONTBASE = "FrontBase"
 
 class DBMS_DIRECTORY_NAME(object):
     ACCESS = "access"
@@ -60,6 +72,33 @@ class DBMS_DIRECTORY_NAME(object):
     HSQLDB = "hsqldb"
     H2 = "h2"
     INFORMIX = "informix"
+    MONETDB = "monetdb"
+    DERBY = "derby"
+    VERTICA = "vertica"
+    MCKOI = "mckoi"
+    PRESTO = "presto"
+    ALTIBASE = "altibase"
+    MIMERSQL = "mimersql"
+    CRATEDB = "cratedb"
+    CUBRID = "cubrid"
+    CACHE = "cache"
+    EXTREMEDB = "extremedb"
+    FRONTBASE = "frontbase"
+
+class FORK(object):
+    MARIADB = "MariaDB"
+    MEMSQL = "MemSQL"
+    PERCONA = "Percona"
+    COCKROACHDB = "CockroachDB"
+    TIDB = "TiDB"
+    REDSHIFT = "Amazon Redshift"
+    GREENPLUM = "Greenplum"
+    DRIZZLE = "Drizzle"
+    IGNITE = "Apache Ignite"
+    AURORA = "Aurora"
+    ENTERPRISEDB = "EnterpriseDB"
+    YELLOWBRICK = "Yellowbrick"
+    IRIS = "Iris"
 
 class CUSTOM_LOGGING(object):
     PAYLOAD = 9
@@ -130,12 +169,12 @@ class HASH(object):
     MSSQL_NEW = r'(?i)\A0x0200[0-9a-f]{8}[0-9a-f]{128}\Z'
     ORACLE = r'(?i)\As:[0-9a-f]{60}\Z'
     ORACLE_OLD = r'(?i)\A[0-9a-f]{16}\Z'
-    MD5_GENERIC = r'(?i)\A[0-9a-f]{32}\Z'
-    SHA1_GENERIC = r'(?i)\A[0-9a-f]{40}\Z'
+    MD5_GENERIC = r'(?i)\A(0x)?[0-9a-f]{32}\Z'
+    SHA1_GENERIC = r'(?i)\A(0x)?[0-9a-f]{40}\Z'
     SHA224_GENERIC = r'(?i)\A[0-9a-f]{56}\Z'
-    SHA256_GENERIC = r'(?i)\A[0-9a-f]{64}\Z'
+    SHA256_GENERIC = r'(?i)\A(0x)?[0-9a-f]{64}\Z'
     SHA384_GENERIC = r'(?i)\A[0-9a-f]{96}\Z'
-    SHA512_GENERIC = r'(?i)\A[0-9a-f]{128}\Z'
+    SHA512_GENERIC = r'(?i)\A(0x)?[0-9a-f]{128}\Z'
     CRYPT_GENERIC = r'\A(?!\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\Z)(?![0-9]+\Z)[./0-9A-Za-z]{13}\Z'
     JOOMLA = r'\A[0-9a-f]{32}:\w{32}\Z'
     WORDPRESS = r'\A\$P\$[./0-9a-zA-Z]{31}\Z'
@@ -244,8 +283,8 @@ class HASHDB_KEYS(object):
     OS = "OS"
 
 class REDIRECTION(object):
-    YES = "Y"
-    NO = "N"
+    YES = 'Y'
+    NO = 'N'
 
 class PAYLOAD(object):
     SQLINJECTION = {
@@ -389,3 +428,8 @@ class TIMEOUT_STATE(object):
 class HINT(object):
     PREPEND = 0
     APPEND = 1
+
+class FUZZ_UNION_COLUMN:
+    STRING = "<string>"
+    INTEGER = "<integer>"
+    NULL = "NULL"

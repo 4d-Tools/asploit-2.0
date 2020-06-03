@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -29,7 +29,7 @@ def checkDependencies():
                     logger.warn(warnMsg)
             elif dbmsName == DBMS.MYSQL:
                 __import__("pymysql")
-            elif dbmsName == DBMS.PGSQL:
+            elif dbmsName in (DBMS.PGSQL, DBMS.CRATEDB):
                 __import__("psycopg2")
             elif dbmsName == DBMS.ORACLE:
                 __import__("cx_Oracle")
@@ -41,11 +41,23 @@ def checkDependencies():
                 __import__("kinterbasdb")
             elif dbmsName == DBMS.DB2:
                 __import__("ibm_db_dbi")
-            elif dbmsName == DBMS.HSQLDB:
+            elif dbmsName in (DBMS.HSQLDB, DBMS.CACHE):
                 __import__("jaydebeapi")
                 __import__("jpype")
             elif dbmsName == DBMS.INFORMIX:
                 __import__("ibm_db_dbi")
+            elif dbmsName == DBMS.MONETDB:
+                __import__("pymonetdb")
+            elif dbmsName == DBMS.DERBY:
+                __import__("drda")
+            elif dbmsName == DBMS.VERTICA:
+                __import__("vertica_python")
+            elif dbmsName == DBMS.PRESTO:
+                __import__("prestodb")
+            elif dbmsName == DBMS.MIMERSQL:
+                __import__("mimerpy")
+            elif dbmsName == DBMS.CUBRID:
+                __import__("CUBRIDdb")
         except:
             warnMsg = "sqlmap requires '%s' third-party library " % data[1]
             warnMsg += "in order to directly connect to the DBMS "
@@ -81,8 +93,8 @@ def checkDependencies():
         missing_libraries.add('python-ntlm')
 
     try:
-        __import__("websocket.ABNF")
-        debugMsg = "'python websocket-client' library is found"
+        __import__("websocket._abnf")
+        debugMsg = "'websocket-client' library is found"
         logger.debug(debugMsg)
     except ImportError:
         warnMsg = "sqlmap requires 'websocket-client' third-party library "
@@ -90,6 +102,26 @@ def checkDependencies():
         warnMsg += "Download from 'https://pypi.python.org/pypi/websocket-client/'"
         logger.warn(warnMsg)
         missing_libraries.add('websocket-client')
+
+    try:
+        __import__("tkinter")
+        debugMsg = "'tkinter' library is found"
+        logger.debug(debugMsg)
+    except ImportError:
+        warnMsg = "sqlmap requires 'tkinter' library "
+        warnMsg += "if you plan to run a GUI"
+        logger.warn(warnMsg)
+        missing_libraries.add('tkinter')
+
+    try:
+        __import__("tkinter.ttk")
+        debugMsg = "'tkinter.ttk' library is found"
+        logger.debug(debugMsg)
+    except ImportError:
+        warnMsg = "sqlmap requires 'tkinter.ttk' library "
+        warnMsg += "if you plan to run a GUI"
+        logger.warn(warnMsg)
+        missing_libraries.add('tkinter.ttk')
 
     if IS_WIN:
         try:

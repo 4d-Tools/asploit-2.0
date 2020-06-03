@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -10,7 +10,6 @@ import re
 import time
 import xml.etree.ElementTree
 
-from extra.safe2bin.safe2bin import safecharencode
 from lib.core.agent import agent
 from lib.core.bigarray import BigArray
 from lib.core.common import arrayizeValue
@@ -62,6 +61,7 @@ from lib.core.threads import runThreads
 from lib.core.unescaper import unescaper
 from lib.request.connect import Connect as Request
 from lib.utils.progress import ProgressBar
+from lib.utils.safe2bin import safecharencode
 from thirdparty import six
 from thirdparty.odict import OrderedDict
 
@@ -78,6 +78,14 @@ def _oneShotUnionUse(expression, unpack=True, limited=False):
             injExpression = unescaper.escape(agent.concatQuery(expression, unpack))
             kb.unionDuplicates = vector[7]
             kb.forcePartialUnion = vector[8]
+
+            # Note: introduced columns in 1.4.2.42#dev
+            try:
+                kb.tableFrom = vector[9]
+                kb.unionTemplate = vector[10]
+            except IndexError:
+                pass
+
             query = agent.forgeUnionQuery(injExpression, vector[0], vector[1], vector[2], vector[3], vector[4], vector[5], vector[6], None, limited)
             where = PAYLOAD.WHERE.NEGATIVE if conf.limitStart or conf.limitStop else vector[6]
         else:
@@ -123,7 +131,7 @@ def _oneShotUnionUse(expression, unpack=True, limited=False):
 
                             try:
                                 decodeBase64(value)
-                            except binascii.Error:
+                            except (binascii.Error, TypeError):
                                 base64 = False
                                 break
 
@@ -159,6 +167,12 @@ def _oneShotUnionUse(expression, unpack=True, limited=False):
                 warnMsg += "(probably due to its length and/or content): "
                 warnMsg += safecharencode(trimmed)
                 logger.warn(warnMsg)
+            elif re.search(r"ORDER BY [^ ]+\Z", expression):
+                debugMsg = "retrying failed SQL query without the ORDER BY clause"
+                logger.debug(debugMsg)
+
+                expression = re.sub(r"\s*ORDER BY [^ ]+\Z", "", expression)
+                retVal = _oneShotUnionUse(expression, unpack, limited)
     else:
         vector = kb.injection.data[PAYLOAD.TECHNIQUE.UNION].vector
         kb.unionDuplicates = vector[7]
@@ -261,9 +275,9 @@ def unionUse(expression, unpack=True, dump=False):
                 else:
                     stopLimit = int(count)
 
-                    infoMsg = "used SQL query returns "
-                    infoMsg += "%d %s" % (stopLimit, "entries" if stopLimit > 1 else "entry")
-                    logger.info(infoMsg)
+                    debugMsg = "used SQL query returns "
+                    debugMsg += "%d %s" % (stopLimit, "entries" if stopLimit > 1 else "entry")
+                    logger.debug(debugMsg)
 
             elif count and (not isinstance(count, six.string_types) or not count.isdigit()):
                 warnMsg = "it was not possible to count the number "

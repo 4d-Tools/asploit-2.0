@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -15,6 +15,7 @@ import string
 from lib.core.common import getSafeExString
 from lib.core.common import openFile
 from lib.core.compat import xrange
+from lib.core.convert import getUnicode
 from lib.core.data import logger
 from thirdparty.six import unichr as _unichr
 
@@ -79,9 +80,7 @@ def purge(directory):
             pass
 
     logger.debug("deleting the whole directory tree")
-    os.chdir(os.path.join(directory, ".."))
-
     try:
         shutil.rmtree(directory)
     except OSError as ex:
-        logger.error("problem occurred while removing directory '%s' ('%s')" % (directory, getSafeExString(ex)))
+        logger.error("problem occurred while removing directory '%s' ('%s')" % (getUnicode(directory), getSafeExString(ex)))

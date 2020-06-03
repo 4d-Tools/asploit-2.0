@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
+import re
 import time
 
-from extra.safe2bin.safe2bin import safecharencode
 from lib.core.agent import agent
 from lib.core.common import Backend
 from lib.core.common import calculateDeltaSeconds
@@ -26,6 +26,7 @@ from lib.core.enums import DBMS
 from lib.core.enums import EXPECTED
 from lib.core.enums import TIMEOUT_STATE
 from lib.core.settings import UNICODE_ENCODING
+from lib.utils.safe2bin import safecharencode
 from lib.utils.timeout import timeout
 
 def direct(query, content=True):
@@ -43,8 +44,14 @@ def direct(query, content=True):
                 select = False
                 break
 
-    if select and not query.upper().startswith("SELECT "):
-        query = "SELECT %s" % query
+    if select:
+        if not query.upper().startswith("SELECT "):
+            query = "SELECT %s" % query
+        if conf.binaryFields:
+            for field in conf.binaryFields:
+                field = field.strip()
+                if re.search(r"\b%s\b" % re.escape(field), query):
+                    query = re.sub(r"\b%s\b" % re.escape(field), agent.hexConvertField(field), query)
 
     logger.log(CUSTOM_LOGGING.PAYLOAD, query)
 

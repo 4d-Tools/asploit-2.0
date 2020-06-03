@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -105,6 +105,7 @@ def update():
 
         dataToStdout("\r[%s] [INFO] update in progress" % time.strftime("%X"))
 
+        output = ""
         try:
             process = subprocess.Popen("git checkout . && git pull %s HEAD" % GIT_REPOSITORY, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=paths.SQLMAP_ROOT_PATH)
             pollProcess(process, True)
@@ -135,6 +136,6 @@ def update():
             infoMsg += "https://github.com/sqlmapproject/sqlmap/downloads"
         else:
             infoMsg = "for Linux platform it's recommended "
-            infoMsg += "to install a standard 'git' package (e.g.: 'sudo apt-get install git')"
+            infoMsg += "to install a standard 'git' package (e.g.: 'sudo apt install git')"
 
         logger.info(infoMsg)

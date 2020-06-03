@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -30,6 +30,7 @@ from lib.core.common import getSortedInjectionTests
 from lib.core.common import hashDBRetrieve
 from lib.core.common import hashDBWrite
 from lib.core.common import intersect
+from lib.core.common import joinValue
 from lib.core.common import listToStrValue
 from lib.core.common import parseFilePaths
 from lib.core.common import popValue
@@ -44,6 +45,7 @@ from lib.core.common import unArrayizeValue
 from lib.core.common import wasLastResponseDBMSError
 from lib.core.common import wasLastResponseHTTPError
 from lib.core.compat import xrange
+from lib.core.convert import getBytes
 from lib.core.convert import getUnicode
 from lib.core.data import conf
 from lib.core.data import kb
@@ -52,6 +54,7 @@ from lib.core.datatype import AttribDict
 from lib.core.datatype import InjectionDict
 from lib.core.decorators import stackedmethod
 from lib.core.dicts import FROM_DUMMY_TABLE
+from lib.core.dicts import HEURISTIC_NULL_EVAL
 from lib.core.enums import DBMS
 from lib.core.enums import HASHDB_KEYS
 from lib.core.enums import HEURISTIC_TEST
@@ -73,6 +76,7 @@ from lib.core.settings import BOUNDED_INJECTION_MARKER
 from lib.core.settings import CANDIDATE_SENTENCE_MIN_LENGTH
 from lib.core.settings import CHECK_INTERNET_ADDRESS
 from lib.core.settings import CHECK_INTERNET_VALUE
+from lib.core.settings import DEFAULT_COOKIE_DELIMITER
 from lib.core.settings import DEFAULT_GET_POST_DELIMITER
 from lib.core.settings import DUMMY_NON_SQLI_CHECK_APPENDIX
 from lib.core.settings import FI_ERROR_REGEX
@@ -94,6 +98,7 @@ from lib.core.settings import UNICODE_ENCODING
 from lib.core.settings import UPPER_RATIO_BOUND
 from lib.core.settings import URI_HTTP_HEADER
 from lib.core.threads import getCurrentThreadData
+from lib.core.unescaper import unescaper
 from lib.request.connect import Connect as Request
 from lib.request.comparison import comparison
 from lib.request.inject import checkBooleanExpression
@@ -152,7 +157,7 @@ def checkSqlInjection(place, parameter, value):
                 # payload), ask the user to limit the tests to the fingerprinted
                 # DBMS
                 if kb.reduceTests is None and not conf.testFilter and (intersect(Backend.getErrorParsedDBMSes(), SUPPORTED_DBMS, True) or kb.heuristicDbms or injection.dbms):
-                    msg = "it looks like the back-end DBMS is '%s'. " % (Format.getErrorParsedDBMSes() or kb.heuristicDbms or injection.dbms)
+                    msg = "it looks like the back-end DBMS is '%s'. " % (Format.getErrorParsedDBMSes() or kb.heuristicDbms or joinValue(injection.dbms, '/'))
                     msg += "Do you want to skip test payloads specific for other DBMSes? [Y/n]"
                     kb.reduceTests = (Backend.getErrorParsedDBMSes() or [kb.heuristicDbms]) if readInput(msg, default='Y', boolean=True) else []
 
@@ -162,7 +167,7 @@ def checkSqlInjection(place, parameter, value):
             # regardless of --level and --risk values provided
             if kb.extendTests is None and not conf.testFilter and (conf.level < 5 or conf.risk < 3) and (intersect(Backend.getErrorParsedDBMSes(), SUPPORTED_DBMS, True) or kb.heuristicDbms or injection.dbms):
                 msg = "for the remaining tests, do you want to include all tests "
-                msg += "for '%s' extending provided " % (Format.getErrorParsedDBMSes() or kb.heuristicDbms or injection.dbms)
+                msg += "for '%s' extending provided " % (Format.getErrorParsedDBMSes() or kb.heuristicDbms or joinValue(injection.dbms, '/'))
                 msg += "level (%d)" % conf.level if conf.level < 5 else ""
                 msg += " and " if conf.level < 5 and conf.risk < 3 else ""
                 msg += "risk (%d)" % conf.risk if conf.risk < 3 else ""
@@ -501,7 +506,7 @@ def checkSqlInjection(place, parameter, value):
                             falseRawResponse = "%s%s" % (falseHeaders, falsePage)
 
                             # Checking if there is difference between current FALSE, original and heuristics page (i.e. not used parameter)
-                            if not kb.negativeLogic:
+                            if not any((kb.negativeLogic, conf.string, conf.notString)):
                                 try:
                                     ratio = 1.0
                                     seqMatcher = getCurrentThreadData().seqMatcher
@@ -515,8 +520,6 @@ def checkSqlInjection(place, parameter, value):
                                         continue
                                 except (MemoryError, OverflowError):
                                     pass
-
-                            kb.prevFalsePage = falsePage
 
                             # Perform the test's True request
                             trueResult = Request.queryPage(reqPayload, place, raise404=False)
@@ -598,7 +601,7 @@ def checkSqlInjection(place, parameter, value):
                                         if candidates:
                                             candidates = sorted(candidates, key=len)
                                             for candidate in candidates:
-                                                if re.match(r"\A\w+\Z", candidate):
+                                                if re.match(r"\A\w{2,}\Z", candidate):  # Note: length of 1 (e.g. --string=5) could cause trouble, especially in error message pages with partially reflected payload content
                                                     break
 
                                             conf.string = candidate
@@ -785,8 +788,12 @@ def checkSqlInjection(place, parameter, value):
                                 infoMsg = "executing alerting shell command(s) ('%s')" % conf.alert
                                 logger.info(infoMsg)
 
-                                process = subprocess.Popen(conf.alert.encode(sys.getfilesystemencoding() or UNICODE_ENCODING), shell=True)
-                                process.wait()
+                                try:
+                                    process = subprocess.Popen(getBytes(conf.alert, sys.getfilesystemencoding() or UNICODE_ENCODING), shell=True)
+                                    process.wait()
+                                except Exception as ex:
+                                    errMsg = "error occurred while executing '%s' ('%s')" % (conf.alert, getSafeExString(ex))
+                                    logger.error(errMsg)
 
                             kb.alerted = True
 
@@ -875,12 +882,17 @@ def heuristicCheckDbms(injection):
 
     for dbms in getPublicTypeMembers(DBMS, True):
         randStr1, randStr2 = randomStr(), randomStr()
+
         Backend.forceDbms(dbms)
 
-        if conf.noEscape and dbms not in FROM_DUMMY_TABLE:
-            continue
+        if dbms in HEURISTIC_NULL_EVAL:
+            result = checkBooleanExpression("(SELECT %s%s) IS NULL" % (HEURISTIC_NULL_EVAL[dbms], FROM_DUMMY_TABLE.get(dbms, "")))
+        elif not ((randStr1 in unescaper.escape("'%s'" % randStr1)) and list(FROM_DUMMY_TABLE.values()).count(FROM_DUMMY_TABLE.get(dbms, "")) != 1):
+            result = checkBooleanExpression("(SELECT '%s'%s)=%s%s%s" % (randStr1, FROM_DUMMY_TABLE.get(dbms, ""), SINGLE_QUOTE_MARKER, randStr1, SINGLE_QUOTE_MARKER))
+        else:
+            result = False
 
-        if checkBooleanExpression("(SELECT '%s'%s)=%s%s%s" % (randStr1, FROM_DUMMY_TABLE.get(dbms, ""), SINGLE_QUOTE_MARKER, randStr1, SINGLE_QUOTE_MARKER)):
+        if result:
             if not checkBooleanExpression("(SELECT '%s'%s)=%s%s%s" % (randStr1, FROM_DUMMY_TABLE.get(dbms, ""), SINGLE_QUOTE_MARKER, randStr2, SINGLE_QUOTE_MARKER)):
                 retVal = dbms
                 break
@@ -923,6 +935,12 @@ def checkFalsePositives(injection):
 
                 randInt1 = min(randInt1, randInt2, randInt3)
                 randInt3 = max(randInt1, randInt2, randInt3)
+
+                if conf.string and any(conf.string in getUnicode(_) for _ in (randInt1, randInt2, randInt3)):
+                    continue
+
+                if conf.notString and any(conf.notString in getUnicode(_) for _ in (randInt1, randInt2, randInt3)):
+                    continue
 
                 if randInt3 > randInt2 > randInt1:
                     break
@@ -1098,6 +1116,7 @@ def heuristicCheckSqlInjection(place, parameter):
         logger.warn(infoMsg)
 
     kb.heuristicMode = True
+    kb.disableHtmlDecoding = True
 
     randStr1, randStr2 = randomStr(NON_SQLI_CHECK_PREFIX_SUFFIX_LENGTH), randomStr(NON_SQLI_CHECK_PREFIX_SUFFIX_LENGTH)
     value = "%s%s%s" % (randStr1, DUMMY_NON_SQLI_CHECK_APPENDIX, randStr2)
@@ -1117,6 +1136,7 @@ def heuristicCheckSqlInjection(place, parameter):
             logger.info(infoMsg)
             break
 
+    kb.disableHtmlDecoding = False
     kb.heuristicMode = False
 
     return kb.heuristicTest
@@ -1511,8 +1531,9 @@ def checkConnection(suppressOutput=False):
             conf.disablePrecon = True
 
         if not kb.originalPage and wasLastResponseHTTPError():
-            errMsg = "unable to retrieve page content"
-            raise SqlmapConnectionException(errMsg)
+            if getLastRequestHTTPError() not in (conf.ignoreCode or []):
+                errMsg = "unable to retrieve page content"
+                raise SqlmapConnectionException(errMsg)
         elif wasLastResponseDBMSError():
             warnMsg = "there is a DBMS error found in the HTTP response body "
             warnMsg += "which could interfere with the results of the tests"
@@ -1558,6 +1579,16 @@ def checkConnection(suppressOutput=False):
     finally:
         kb.originalPage = kb.pageTemplate = threadData.lastPage
         kb.originalCode = threadData.lastCode
+
+    if conf.cj and not conf.cookie and not conf.dropSetCookie:
+        candidate = DEFAULT_COOKIE_DELIMITER.join("%s=%s" % (_.name, _.value) for _ in conf.cj)
+
+        message = "you have not declared cookie(s), while "
+        message += "server wants to set its own ('%s'). " % re.sub(r"(=[^=;]{10}[^=;])[^=;]+([^=;]{10})", r"\g<1>...\g<2>", candidate)
+        message += "Do you want to use those [Y/n] "
+        if readInput(message, default='Y', boolean=True):
+            kb.mergeCookies = True
+            conf.httpHeaders.append((HTTP_HEADER.COOKIE, candidate))
 
     return True
 

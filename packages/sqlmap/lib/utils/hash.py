@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -155,7 +155,24 @@ def postgres_passwd(password, username, uppercase=False):
 
     return retVal.upper() if uppercase else retVal.lower()
 
-def mssql_passwd(password, salt, uppercase=False):
+def mssql_new_passwd(password, salt, uppercase=False):  # since version '2012'
+    """
+    Reference(s):
+        http://hashcat.net/forum/thread-1474.html
+        https://sqlity.net/en/2460/sql-password-hash/
+
+    >>> mssql_new_passwd(password='testpass', salt='4086ceb6', uppercase=False)
+    '0x02004086ceb6eb051cdbc5bdae68ffc66c918d4977e592f6bdfc2b444a7214f71fa31c35902c5b7ae773ed5f4c50676d329120ace32ee6bc81c24f70711eb0fc6400e85ebf25'
+    """
+
+    binsalt = decodeHex(salt)
+    unistr = b"".join((_.encode(UNICODE_ENCODING) + b"\0") if ord(_) < 256 else _.encode(UNICODE_ENCODING) for _ in password)
+
+    retVal = "0200%s%s" % (salt, sha512(unistr + binsalt).hexdigest())
+
+    return "0x%s" % (retVal.upper() if uppercase else retVal.lower())
+
+def mssql_passwd(password, salt, uppercase=False):  # versions '2005' and '2008'
     """
     Reference(s):
         http://www.leidecker.info/projects/phrasendrescher/mssql.c
@@ -172,7 +189,7 @@ def mssql_passwd(password, salt, uppercase=False):
 
     return "0x%s" % (retVal.upper() if uppercase else retVal.lower())
 
-def mssql_old_passwd(password, salt, uppercase=True):  # prior to version '2005'
+def mssql_old_passwd(password, salt, uppercase=True):  # version '2000' and before
     """
     Reference(s):
         www.exploit-db.com/download_pdf/15537/
@@ -187,22 +204,6 @@ def mssql_old_passwd(password, salt, uppercase=True):  # prior to version '2005'
     unistr = b"".join((_.encode(UNICODE_ENCODING) + b"\0") if ord(_) < 256 else _.encode(UNICODE_ENCODING) for _ in password)
 
     retVal = "0100%s%s%s" % (salt, sha1(unistr + binsalt).hexdigest(), sha1(unistr.upper() + binsalt).hexdigest())
-
-    return "0x%s" % (retVal.upper() if uppercase else retVal.lower())
-
-def mssql_new_passwd(password, salt, uppercase=False):
-    """
-    Reference(s):
-        http://hashcat.net/forum/thread-1474.html
-
-    >>> mssql_new_passwd(password='testpass', salt='4086ceb6', uppercase=False)
-    '0x02004086ceb6eb051cdbc5bdae68ffc66c918d4977e592f6bdfc2b444a7214f71fa31c35902c5b7ae773ed5f4c50676d329120ace32ee6bc81c24f70711eb0fc6400e85ebf25'
-    """
-
-    binsalt = decodeHex(salt)
-    unistr = b"".join((_.encode(UNICODE_ENCODING) + b"\0") if ord(_) < 256 else _.encode(UNICODE_ENCODING) for _ in password)
-
-    retVal = "0200%s%s" % (salt, sha512(unistr + binsalt).hexdigest())
 
     return "0x%s" % (retVal.upper() if uppercase else retVal.lower())
 
@@ -666,6 +667,9 @@ def attackDumpedTable():
                 if len(table[column]["values"]) <= i:
                     continue
 
+                if conf.binaryFields and column in conf.binaryFields:
+                    continue
+
                 value = table[column]["values"][i]
 
                 if column in binary_fields and re.search(HASH_BINARY_COLUMNS_REGEX, column) is not None:
@@ -708,6 +712,7 @@ def attackDumpedTable():
                 if hash_:
                     key = hash_ if hash_ not in replacements else replacements[hash_]
                     lut[key.lower()] = password
+                    lut["0x%s" % key.lower()] = password
 
             debugMsg = "post-processing table dump"
             logger.debug(debugMsg)
@@ -722,21 +727,40 @@ def attackDumpedTable():
                             table[column]['length'] = max(table[column]['length'], len(table[column]['values'][i]))
 
 def hashRecognition(value):
+    """
+    >>> hashRecognition("179ad45c6ce2cb97cf1029e212046e81") == HASH.MD5_GENERIC
+    True
+    >>> hashRecognition("S:2BFCFDF5895014EE9BB2B9BA067B01E0389BB5711B7B5F82B7235E9E182C") == HASH.ORACLE
+    True
+    >>> hashRecognition("foobar") == None
+    True
+    """
+
     retVal = None
 
-    isOracle, isMySQL = Backend.isDbms(DBMS.ORACLE), Backend.isDbms(DBMS.MYSQL)
+    if value and len(value) >= 8 and ' ' not in value:   # Note: pre-filter condition (for optimization purposes)
+        isOracle, isMySQL = Backend.isDbms(DBMS.ORACLE), Backend.isDbms(DBMS.MYSQL)
 
-    if isinstance(value, six.string_types):
-        for name, regex in getPublicTypeMembers(HASH):
-            # Hashes for Oracle and old MySQL look the same hence these checks
-            if isOracle and regex == HASH.MYSQL_OLD or isMySQL and regex == HASH.ORACLE_OLD:
-                continue
-            elif regex == HASH.CRYPT_GENERIC:
-                if any((value.lower() == value, value.upper() == value)):
+        if kb.cache.hashRegex is None:
+            parts = []
+
+            for name, regex in getPublicTypeMembers(HASH):
+                # Hashes for Oracle and old MySQL look the same hence these checks
+                if isOracle and regex == HASH.MYSQL_OLD or isMySQL and regex == HASH.ORACLE_OLD:
                     continue
-            elif re.match(regex, value):
-                retVal = regex
-                break
+                elif regex == HASH.CRYPT_GENERIC:
+                    if any((value.lower() == value, value.upper() == value)):
+                        continue
+                else:
+                    parts.append("(?P<%s>%s)" % (name, regex))
+
+            kb.cache.hashRegex = ('|'.join(parts)).replace("(?i)", "")
+
+        if isinstance(value, six.string_types):
+            match = re.search(kb.cache.hashRegex, value, re.I)
+            if match:
+                algorithm, _ = [_ for _ in match.groupdict().items() if _[1] is not None][0]
+                retVal = getattr(HASH, algorithm)
 
     return retVal
 
@@ -898,6 +922,8 @@ def _bruteProcessVariantB(user, hash_, kwargs, hash_regex, suffix, retVal, found
                 proc_count.value -= 1
 
 def dictionaryAttack(attack_dict):
+    global _multiprocessing
+
     suffix_list = [""]
     custom_wordlist = [""]
     hash_regexes = []
@@ -906,6 +932,9 @@ def dictionaryAttack(attack_dict):
     user_hash = []
     processException = False
     foundHash = False
+
+    if conf.disableMulti:
+        _multiprocessing = None
 
     for (_, hashes) in attack_dict.items():
         for hash_ in hashes:
@@ -942,6 +971,8 @@ def dictionaryAttack(attack_dict):
                         if hash_regex in (HASH.MD5_BASE64, HASH.SHA1_BASE64, HASH.SHA256_BASE64, HASH.SHA512_BASE64):
                             item = [(user, encodeHex(decodeBase64(hash_, binary=True))), {}]
                         elif hash_regex in (HASH.MYSQL, HASH.MYSQL_OLD, HASH.MD5_GENERIC, HASH.SHA1_GENERIC, HASH.SHA224_GENERIC, HASH.SHA256_GENERIC, HASH.SHA384_GENERIC, HASH.SHA512_GENERIC, HASH.APACHE_SHA1):
+                            if hash_.startswith("0x"):  # Reference: https://docs.microsoft.com/en-us/sql/t-sql/functions/hashbytes-transact-sql?view=sql-server-2017
+                                hash_ = hash_[2:]
                             item = [(user, hash_), {}]
                         elif hash_regex in (HASH.SSHA,):
                             item = [(user, hash_), {"salt": decodeBase64(hash_, binary=True)[20:]}]
@@ -983,7 +1014,7 @@ def dictionaryAttack(attack_dict):
                                 resumes.append((user, hash_, resumed))
                             keys.add(hash_)
 
-                    except (binascii.Error, IndexError):
+                    except (binascii.Error, TypeError, IndexError):
                         pass
 
         if not attack_info:
@@ -1091,7 +1122,7 @@ def dictionaryAttack(attack_dict):
 
                     else:
                         warnMsg = "multiprocessing hash cracking is currently "
-                        warnMsg += "not supported on this platform"
+                        warnMsg += "%s on this platform" % ("not supported" if not conf.disableMulti else "disabled")
                         singleTimeWarnMessage(warnMsg)
 
                         retVal = _queue.Queue()
@@ -1179,7 +1210,7 @@ def dictionaryAttack(attack_dict):
 
                         else:
                             warnMsg = "multiprocessing hash cracking is currently "
-                            warnMsg += "not supported on this platform"
+                            warnMsg += "%s on this platform" % ("not supported" if not conf.disableMulti else "disabled")
                             singleTimeWarnMessage(warnMsg)
 
                             class Value(object):

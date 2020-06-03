@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -10,7 +10,6 @@ from __future__ import print_function
 import re
 import time
 
-from extra.safe2bin.safe2bin import safecharencode
 from lib.core.agent import agent
 from lib.core.bigarray import BigArray
 from lib.core.common import Backend
@@ -60,6 +59,7 @@ from lib.core.threads import runThreads
 from lib.core.unescaper import unescaper
 from lib.request.connect import Connect as Request
 from lib.utils.progress import ProgressBar
+from lib.utils.safe2bin import safecharencode
 from thirdparty import six
 
 def _oneShotErrorUse(expression, field=None, chunkTest=False):
@@ -76,7 +76,7 @@ def _oneShotErrorUse(expression, field=None, chunkTest=False):
 
     threadData.resumed = retVal is not None and not partialValue
 
-    if any(Backend.isDbms(dbms) for dbms in (DBMS.MYSQL, DBMS.MSSQL, DBMS.ORACLE)) and kb.errorChunkLength is None and not chunkTest and not kb.testMode:
+    if any(Backend.isDbms(dbms) for dbms in (DBMS.MYSQL, DBMS.MSSQL, DBMS.SYBASE, DBMS.ORACLE)) and kb.errorChunkLength is None and not chunkTest and not kb.testMode:
         debugMsg = "searching for error chunk length..."
         logger.debug(debugMsg)
 
@@ -117,7 +117,7 @@ def _oneShotErrorUse(expression, field=None, chunkTest=False):
                 if field:
                     nulledCastedField = agent.nullAndCastField(field)
 
-                    if any(Backend.isDbms(dbms) for dbms in (DBMS.MYSQL, DBMS.MSSQL, DBMS.ORACLE)) and not any(_ in field for _ in ("COUNT", "CASE")) and kb.errorChunkLength and not chunkTest:
+                    if any(Backend.isDbms(dbms) for dbms in (DBMS.MYSQL, DBMS.MSSQL, DBMS.SYBASE, DBMS.ORACLE)) and not any(_ in field for _ in ("COUNT", "CASE")) and kb.errorChunkLength and not chunkTest:
                         extendedField = re.search(r"[^ ,]*%s[^ ,]*" % re.escape(field), expression).group(0)
                         if extendedField != field:  # e.g. MIN(surname)
                             nulledCastedField = extendedField.replace(field, nulledCastedField)
@@ -177,7 +177,7 @@ def _oneShotErrorUse(expression, field=None, chunkTest=False):
                             else:
                                 output = output.rstrip()
 
-                if any(Backend.isDbms(dbms) for dbms in (DBMS.MYSQL, DBMS.MSSQL, DBMS.ORACLE)):
+                if any(Backend.isDbms(dbms) for dbms in (DBMS.MYSQL, DBMS.MSSQL, DBMS.SYBASE, DBMS.ORACLE)):
                     if offset == 1:
                         retVal = output
                     else:
@@ -340,9 +340,9 @@ def errorUse(expression, dump=False):
                 else:
                     stopLimit = int(count)
 
-                    infoMsg = "used SQL query returns "
-                    infoMsg += "%d %s" % (stopLimit, "entries" if stopLimit > 1 else "entry")
-                    logger.info(infoMsg)
+                    debugMsg = "used SQL query returns "
+                    debugMsg += "%d %s" % (stopLimit, "entries" if stopLimit > 1 else "entry")
+                    logger.debug(debugMsg)
 
             elif count and not count.isdigit():
                 warnMsg = "it was not possible to count the number "
@@ -367,7 +367,7 @@ def errorUse(expression, dump=False):
                     message = "due to huge table size do you want to remove "
                     message += "ORDER BY clause gaining speed over consistency? [y/N] "
 
-                    if readInput(message, default="N", boolean=True):
+                    if readInput(message, default='N', boolean=True):
                         expression = expression[:expression.index(" ORDER BY ")]
 
                 numThreads = min(conf.threads, (stopLimit - startLimit))

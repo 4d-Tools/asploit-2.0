@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
+
+import re
 
 from lib.core.common import filterPairValues
 from lib.core.common import isListLike
@@ -185,7 +187,7 @@ class Enumeration(GenericEnumeration):
             colList = []
 
         if conf.exclude:
-            colList = [_ for _ in colList if _ not in conf.exclude.split(',')]
+            colList = [_ for _ in colList if re.search(conf.exclude, _, re.I) is None]
 
         for col in colList:
             colList[colList.index(col)] = safeSQLIdentificatorNaming(col)

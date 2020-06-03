@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -33,7 +33,7 @@ class Connector(GenericConnector):
     def connect(self):
         self.initConnection()
         try:
-            msg = "what's the location of 'hsqldb.jar'? "
+            msg = "please enter the location of 'hsqldb.jar'? "
             jar = readInput(msg)
             checkFile(jar)
             args = "-Djava.class.path=%s" % jar

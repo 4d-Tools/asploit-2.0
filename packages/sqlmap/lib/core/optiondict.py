@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -19,7 +19,6 @@ optDict = {
         "sessionFile": "string",
         "googleDork": "string",
         "configFile": "string",
-        "sitemapUrl": "string",
     },
 
     "Request": {
@@ -61,6 +60,7 @@ optDict = {
         "skipUrlEncode": "boolean",
         "csrfToken": "string",
         "csrfUrl": "string",
+        "csrfMethod": "string",
         "forceSSL": "boolean",
         "chunked": "boolean",
         "hpp": "boolean",
@@ -201,6 +201,7 @@ optDict = {
         "trafficFile": "string",
         "answers": "string",
         "batch": "boolean",
+        "base64Parameter": "string",
         "binaryFields": "string",
         "charset": "string",
         "checkInternet": "boolean",
@@ -237,9 +238,11 @@ optDict = {
         "listTampers": "boolean",
         "offline": "boolean",
         "purge": "boolean",
+        "resultsFile": "string",
         "tmpDir": "string",
-        "wizard": "boolean",
+        "unstable": "boolean",
         "updateAll": "boolean",
+        "wizard": "boolean",
         "verbose": "integer",
     },
 
@@ -250,9 +253,6 @@ optDict = {
         "forceDns": "boolean",
         "murphyRate": "integer",
         "smokeTest": "boolean",
-        "liveTest": "boolean",
-        "stopFail": "boolean",
-        "runCase": "string",
     },
 
     "API": {

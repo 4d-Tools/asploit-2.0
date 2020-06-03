@@ -1,7 +1,7 @@
-clear
+cowsay 'SQLMAP For ASPLOIT2.0';
 cd sqlmap
 
-echo "Which URL TYPE OR PASTE HERE"
+echo "Which URL To Do Attack :";
 read url 
 echo  "starting the Normal db-s attack "
 echo "note : you can access sqlmap also in projectroot/packages/sqlmap"

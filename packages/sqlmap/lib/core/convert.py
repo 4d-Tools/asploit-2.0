@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -19,6 +19,7 @@ import re
 import sys
 
 from lib.core.bigarray import BigArray
+from lib.core.compat import xrange
 from lib.core.data import conf
 from lib.core.data import kb
 from lib.core.settings import INVALID_UNICODE_PRIVATE_AREA
@@ -30,6 +31,11 @@ from lib.core.settings import SAFE_HEX_MARKER
 from lib.core.settings import UNICODE_ENCODING
 from thirdparty import six
 from thirdparty.six import unichr as _unichr
+
+try:
+    from html import escape as htmlEscape
+except ImportError:
+    from cgi import escape as htmlEscape
 
 def base64pickle(value):
     """
@@ -89,7 +95,7 @@ def htmlUnescape(value):
 
         try:
             retVal = re.sub(r"&#x([^ ;]+);", lambda match: _unichr(int(match.group(1), 16)), retVal)
-        except ValueError:
+        except (ValueError, OverflowError):
             pass
 
     return retVal
@@ -184,7 +190,7 @@ def encodeHex(value, binary=True):
 
     return retVal
 
-def decodeBase64(value, binary=True):
+def decodeBase64(value, binary=True, encoding=None):
     """
     Returns a decoded representation of provided Base64 value
 
@@ -197,11 +203,11 @@ def decodeBase64(value, binary=True):
     retVal = base64.b64decode(value)
 
     if not binary:
-        retVal = getText(retVal)
+        retVal = getText(retVal, encoding)
 
     return retVal
 
-def encodeBase64(value, binary=True):
+def encodeBase64(value, binary=True, encoding=None):
     """
     Returns a decoded representation of provided Base64 value
 
@@ -212,16 +218,16 @@ def encodeBase64(value, binary=True):
     """
 
     if isinstance(value, six.text_type):
-        value = value.encode(UNICODE_ENCODING)
+        value = value.encode(encoding or UNICODE_ENCODING)
 
     retVal = base64.b64encode(value)
 
     if not binary:
-        retVal = getText(retVal)
+        retVal = getText(retVal, encoding)
 
     return retVal
 
-def getBytes(value, encoding=UNICODE_ENCODING, errors="strict", unsafe=True):
+def getBytes(value, encoding=None, errors="strict", unsafe=True):
     """
     Returns byte representation of provided Unicode value
 
@@ -230,6 +236,14 @@ def getBytes(value, encoding=UNICODE_ENCODING, errors="strict", unsafe=True):
     """
 
     retVal = value
+
+    if encoding is None:
+        encoding = conf.get("encoding") or UNICODE_ENCODING
+
+    try:
+        codecs.lookup(encoding)
+    except (LookupError, TypeError):
+        encoding = UNICODE_ENCODING
 
     if isinstance(value, six.text_type):
         if INVALID_UNICODE_PRIVATE_AREA:
@@ -242,7 +256,10 @@ def getBytes(value, encoding=UNICODE_ENCODING, errors="strict", unsafe=True):
             if unsafe:
                 retVal = re.sub(r"%s([0-9a-f]{2})" % SAFE_HEX_MARKER, lambda _: decodeHex(_.group(1)), retVal)
         else:
-            retVal = value.encode(encoding, errors)
+            try:
+                retVal = value.encode(encoding, errors)
+            except UnicodeError:
+                retVal = value.encode(UNICODE_ENCODING, errors="replace")
 
             if unsafe:
                 retVal = re.sub(b"\\\\x([0-9a-f]{2})", lambda _: decodeHex(_.group(1)), retVal)
@@ -263,7 +280,7 @@ def getOrds(value):
 
 def getUnicode(value, encoding=None, noneToNull=False):
     """
-    Return the unicode representation of the supplied value:
+    Returns the unicode representation of the supplied value
 
     >>> getUnicode('test') == u'test'
     True
@@ -289,7 +306,7 @@ def getUnicode(value, encoding=None, noneToNull=False):
         for candidate in candidates:
             try:
                 return six.text_type(value, candidate)
-            except UnicodeDecodeError:
+            except (UnicodeDecodeError, LookupError):
                 pass
 
         try:
@@ -305,7 +322,7 @@ def getUnicode(value, encoding=None, noneToNull=False):
         except UnicodeDecodeError:
             return six.text_type(str(value), errors="ignore")  # encoding ignored for non-basestring instances
 
-def getText(value):
+def getText(value, encoding=None):
     """
     Returns textual value of a given value (Note: not necessary Unicode on Python2)
 
@@ -318,7 +335,7 @@ def getText(value):
     retVal = value
 
     if isinstance(value, six.binary_type):
-        retVal = getUnicode(value)
+        retVal = getUnicode(value, encoding)
 
     if six.PY2:
         try:
@@ -373,5 +390,22 @@ def stdoutEncode(value):
 
     else:
         retVal = value
+
+    return retVal
+
+def getConsoleLength(value):
+    """
+    Returns console width of unicode values
+
+    >>> getConsoleLength("abc")
+    3
+    >>> getConsoleLength(u"\\u957f\\u6c5f")
+    4
+    """
+
+    if isinstance(value, six.text_type):
+        retVal = sum((2 if ord(_) >= 0x3000 else 1) for _ in value)
+    else:
+        retVal = len(value)
 
     return retVal

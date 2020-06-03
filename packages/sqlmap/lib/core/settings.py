@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -18,7 +18,7 @@ from lib.core.enums import OS
 from thirdparty.six import unichr as _unichr
 
 # sqlmap version (<major>.<minor>.<month>.<monthly commit>)
-VERSION = "1.3.8.15"
+VERSION = "1.4.6.0"
 TYPE = "dev" if VERSION.count('.') > 2 and VERSION.split('.')[-1] != '0' else "stable"
 TYPE_COLORS = {"dev": 33, "stable": 90, "pip": 34}
 VERSION_STRING = "sqlmap/%s#%s" % ('.'.join(VERSION.split('.')[:-1]) if VERSION.count('.') > 2 and VERSION.split('.')[-1] == '0' else VERSION, TYPE)
@@ -29,6 +29,7 @@ DEV_EMAIL_ADDRESS = "dev@sqlmap.org"
 ISSUES_PAGE = "https://github.com/sqlmapproject/sqlmap/issues/new"
 GIT_REPOSITORY = "https://github.com/sqlmapproject/sqlmap.git"
 GIT_PAGE = "https://github.com/sqlmapproject/sqlmap"
+WIKI_PAGE = "https://github.com/sqlmapproject/sqlmap/wiki/"
 ZIPBALL_PAGE = "https://github.com/sqlmapproject/sqlmap/zipball/master"
 
 # colorful banner
@@ -59,6 +60,7 @@ UPPER_RATIO_BOUND = 0.98
 PARAMETER_AMP_MARKER = "__AMP__"
 PARAMETER_SEMICOLON_MARKER = "__SEMICOLON__"
 BOUNDARY_BACKSLASH_MARKER = "__BACKSLASH__"
+PARAMETER_PERCENTAGE_MARKER = "__PERCENTAGE__"
 PARTIAL_VALUE_MARKER = "__PARTIAL_VALUE__"
 PARTIAL_HEX_VALUE_MARKER = "__PARTIAL_HEX_VALUE__"
 URI_QUESTION_MARKER = "__QUESTION_MARK__"
@@ -73,6 +75,7 @@ RANDOM_STRING_MARKER = "[RANDSTR]"
 SLEEP_TIME_MARKER = "[SLEEPTIME]"
 INFERENCE_MARKER = "[INFERENCE]"
 SINGLE_QUOTE_MARKER = "[SINGLE_QUOTE]"
+GENERIC_SQL_COMMENT_MARKER = "[GENERIC_SQL_COMMENT]"
 
 PAYLOAD_DELIMITER = "__PAYLOAD_DELIMITER__"
 CHAR_INFERENCE_MARK = "%c"
@@ -89,6 +92,12 @@ PERMISSION_DENIED_REGEX = r"(?P<result>(command|permission|access)\s*(was|is)?\s
 
 # Regular expression used in recognition of generic protection mechanisms
 GENERIC_PROTECTION_REGEX = r"(?i)\b(rejected|blocked|protection|incident|denied|detected|dangerous|firewall)\b"
+
+# Regular expression used to detect errors in fuzz(y) UNION test
+FUZZ_UNION_ERROR_REGEX = r"(?i)data\s?type|comparable|compatible|conversion|converting|failed|error"
+
+# Upper threshold for starting the fuzz(y) UNION test
+FUZZ_UNION_MAX_COLUMNS = 10
 
 # Regular expression used for recognition of generic maximum connection messages
 MAX_CONNECTIONS_REGEX = r"\bmax.+?\bconnection"
@@ -231,19 +240,22 @@ STDIN_PIPE_DASH = '-'
 # URL used in dummy runs
 DUMMY_URL = "http://foo/bar?id=1"
 
+# Timeout used during initial websocket (pull) testing
+WEBSOCKET_INITIAL_TIMEOUT = 3
+
 # The name of the operating system dependent module imported. The following names have currently been registered: 'posix', 'nt', 'mac', 'os2', 'ce', 'java', 'riscos'
 PLATFORM = os.name
 PYVERSION = sys.version.split()[0]
 IS_WIN = PLATFORM == "nt"
 
 # Check if running in terminal
-IS_TTY = os.isatty(sys.stdout.fileno())
+IS_TTY = hasattr(sys.stdout, "fileno") and os.isatty(sys.stdout.fileno())
 
 # DBMS system databases
-MSSQL_SYSTEM_DBS = ("Northwind", "master", "model", "msdb", "pubs", "tempdb")
+MSSQL_SYSTEM_DBS = ("Northwind", "master", "model", "msdb", "pubs", "tempdb", "Resource", "ReportServer", "ReportServerTempDB")
 MYSQL_SYSTEM_DBS = ("information_schema", "mysql", "performance_schema", "sys")
 PGSQL_SYSTEM_DBS = ("information_schema", "pg_catalog", "pg_toast", "pgagent")
-ORACLE_SYSTEM_DBS = ('ANONYMOUS', 'APEX_030200', 'APEX_PUBLIC_USER', 'APPQOSSYS', 'BI', 'CTXSYS', 'DBSNMP', 'DIP', 'EXFSYS', 'FLOWS_%', 'FLOWS_FILES', 'HR', 'IX', 'LBACSYS', 'MDDATA', 'MDSYS', 'MGMT_VIEW', 'OC', 'OE', 'OLAPSYS', 'ORACLE_OCM', 'ORDDATA', 'ORDPLUGINS', 'ORDSYS', 'OUTLN', 'OWBSYS', 'PM', 'SCOTT', 'SH', 'SI_INFORMTN_SCHEMA', 'SPATIAL_CSW_ADMIN_USR', 'SPATIAL_WFS_ADMIN_USR', 'SYS', 'SYSMAN', 'SYSTEM', 'WKPROXY', 'WKSYS', 'WK_TEST', 'WMSYS', 'XDB', 'XS$NULL')
+ORACLE_SYSTEM_DBS = ("ADAMS", "ANONYMOUS", "APEX_030200", "APEX_PUBLIC_USER", "APPQOSSYS", "AURORA$ORB$UNAUTHENTICATED", "AWR_STAGE", "BI", "BLAKE", "CLARK", "CSMIG", "CTXSYS", "DBSNMP", "DEMO", "DIP", "DMSYS", "DSSYS", "EXFSYS", "FLOWS_%", "FLOWS_FILES", "HR", "IX", "JONES", "LBACSYS", "MDDATA", "MDSYS", "MGMT_VIEW", "OC", "OE", "OLAPSYS", "ORACLE_OCM", "ORDDATA", "ORDPLUGINS", "ORDSYS", "OUTLN", "OWBSYS", "PAPER", "PERFSTAT", "PM", "SCOTT", "SH", "SI_INFORMTN_SCHEMA", "SPATIAL_CSW_ADMIN_USR", "SPATIAL_WFS_ADMIN_USR", "SYS", "SYSMAN", "SYSTEM", "TRACESVR", "TSMSYS", "WK_TEST", "WKPROXY", "WKSYS", "WMSYS", "XDB", "XS$NULL")
 SQLITE_SYSTEM_DBS = ("sqlite_master", "sqlite_temp_master")
 ACCESS_SYSTEM_DBS = ("MSysAccessObjects", "MSysACEs", "MSysObjects", "MSysQueries", "MSysRelationships", "MSysAccessStorage", "MSysAccessXML", "MSysModules", "MSysModules2")
 FIREBIRD_SYSTEM_DBS = ("RDB$BACKUP_HISTORY", "RDB$CHARACTER_SETS", "RDB$CHECK_CONSTRAINTS", "RDB$COLLATIONS", "RDB$DATABASE", "RDB$DEPENDENCIES", "RDB$EXCEPTIONS", "RDB$FIELDS", "RDB$FIELD_DIMENSIONS", " RDB$FILES", "RDB$FILTERS", "RDB$FORMATS", "RDB$FUNCTIONS", "RDB$FUNCTION_ARGUMENTS", "RDB$GENERATORS", "RDB$INDEX_SEGMENTS", "RDB$INDICES", "RDB$LOG_FILES", "RDB$PAGES", "RDB$PROCEDURES", "RDB$PROCEDURE_PARAMETERS", "RDB$REF_CONSTRAINTS", "RDB$RELATIONS", "RDB$RELATION_CONSTRAINTS", "RDB$RELATION_FIELDS", "RDB$ROLES", "RDB$SECURITY_CLASSES", "RDB$TRANSACTIONS", "RDB$TRIGGERS", "RDB$TRIGGER_MESSAGES", "RDB$TYPES", "RDB$USER_PRIVILEGES", "RDB$VIEW_RELATIONS")
@@ -251,35 +263,70 @@ MAXDB_SYSTEM_DBS = ("SYSINFO", "DOMAIN")
 SYBASE_SYSTEM_DBS = ("master", "model", "sybsystemdb", "sybsystemprocs")
 DB2_SYSTEM_DBS = ("NULLID", "SQLJ", "SYSCAT", "SYSFUN", "SYSIBM", "SYSIBMADM", "SYSIBMINTERNAL", "SYSIBMTS", "SYSPROC", "SYSPUBLIC", "SYSSTAT", "SYSTOOLS")
 HSQLDB_SYSTEM_DBS = ("INFORMATION_SCHEMA", "SYSTEM_LOB")
-H2_SYSTEM_DBS = ("INFORMATION_SCHEMA")
+H2_SYSTEM_DBS = ("INFORMATION_SCHEMA",) + ("IGNITE", "ignite-sys-cache")
 INFORMIX_SYSTEM_DBS = ("sysmaster", "sysutils", "sysuser", "sysadmin")
+MONETDB_SYSTEM_DBS = ("tmp", "json", "profiler")
+DERBY_SYSTEM_DBS = ("NULLID", "SQLJ", "SYS", "SYSCAT", "SYSCS_DIAG", "SYSCS_UTIL", "SYSFUN", "SYSIBM", "SYSPROC", "SYSSTAT")
+VERTICA_SYSTEM_DBS = ("v_catalog", "v_internal", "v_monitor",)
+MCKOI_SYSTEM_DBS = ("",)
+PRESTO_SYSTEM_DBS = ("information_schema",)
+ALTIBASE_SYSTEM_DBS = ("SYSTEM_",)
+MIMERSQL_SYSTEM_DBS = ("information_schema", "SYSTEM",)
+CRATEDB_SYSTEM_DBS = ("information_schema", "pg_catalog", "sys")
+CUBRID_SYSTEM_DBS = ("DBA",)
+CACHE_SYSTEM_DBS = ("%Dictionary", "INFORMATION_SCHEMA", "%SYS")
+EXTREMEDB_SYSTEM_DBS = ("",)
+FRONTBASE_SYSTEM_DBS = ("DEFINITION_SCHEMA", "INFORMATION_SCHEMA")
 
+# Note: (<regular>) + (<forks>)
 MSSQL_ALIASES = ("microsoft sql server", "mssqlserver", "mssql", "ms")
-MYSQL_ALIASES = ("mysql", "my", "mariadb", "maria")
-PGSQL_ALIASES = ("postgresql", "postgres", "pgsql", "psql", "pg")
+MYSQL_ALIASES = ("mysql", "my") + ("mariadb", "maria", "memsql", "tidb", "percona")
+PGSQL_ALIASES = ("postgresql", "postgres", "pgsql", "psql", "pg") + ("cockroach", "cockroachdb", "redshift", "greenplum", "yellowbrick", "enterprisedb", "aurora")
 ORACLE_ALIASES = ("oracle", "orcl", "ora", "or")
 SQLITE_ALIASES = ("sqlite", "sqlite3")
 ACCESS_ALIASES = ("msaccess", "access", "jet", "microsoft access")
 FIREBIRD_ALIASES = ("firebird", "mozilla firebird", "interbase", "ibase", "fb")
-MAXDB_ALIASES = ("maxdb", "sap maxdb", "sap db")
+MAXDB_ALIASES = ("max", "maxdb", "sap maxdb", "sap db")
 SYBASE_ALIASES = ("sybase", "sybase sql server")
 DB2_ALIASES = ("db2", "ibm db2", "ibmdb2")
 HSQLDB_ALIASES = ("hsql", "hsqldb", "hs", "hypersql")
 H2_ALIASES = ("h2",)
 INFORMIX_ALIASES = ("informix", "ibm informix", "ibminformix")
+MONETDB_ALIASES = ("monet", "monetdb",)
+DERBY_ALIASES = ("derby", "apache derby",)
+VERTICA_ALIASES = ("vertica",)
+MCKOI_ALIASES = ("mckoi",)
+PRESTO_ALIASES = ("presto",)
+ALTIBASE_ALIASES = ("altibase",)
+MIMERSQL_ALIASES = ("mimersql", "mimer")
+CRATEDB_ALIASES = ("cratedb", "crate")
+CUBRID_ALIASES = ("cubrid",)
+CACHE_ALIASES = ("intersystems cache", "cachedb", "cache")
+EXTREMEDB_ALIASES = ("extremedb", "extreme")
+FRONTBASE_ALIASES = ("frontbase",)
 
 DBMS_DIRECTORY_DICT = dict((getattr(DBMS, _), getattr(DBMS_DIRECTORY_NAME, _)) for _ in dir(DBMS) if not _.startswith("_"))
 
-SUPPORTED_DBMS = MSSQL_ALIASES + MYSQL_ALIASES + PGSQL_ALIASES + ORACLE_ALIASES + SQLITE_ALIASES + ACCESS_ALIASES + FIREBIRD_ALIASES + MAXDB_ALIASES + SYBASE_ALIASES + DB2_ALIASES + HSQLDB_ALIASES + H2_ALIASES + INFORMIX_ALIASES
+SUPPORTED_DBMS = set(MSSQL_ALIASES + MYSQL_ALIASES + PGSQL_ALIASES + ORACLE_ALIASES + SQLITE_ALIASES + ACCESS_ALIASES + FIREBIRD_ALIASES + MAXDB_ALIASES + SYBASE_ALIASES + DB2_ALIASES + HSQLDB_ALIASES + H2_ALIASES + INFORMIX_ALIASES + MONETDB_ALIASES + DERBY_ALIASES + VERTICA_ALIASES + MCKOI_ALIASES + PRESTO_ALIASES + ALTIBASE_ALIASES + MIMERSQL_ALIASES + CRATEDB_ALIASES + CUBRID_ALIASES + CACHE_ALIASES + EXTREMEDB_ALIASES)
 SUPPORTED_OS = ("linux", "windows")
 
-DBMS_ALIASES = ((DBMS.MSSQL, MSSQL_ALIASES), (DBMS.MYSQL, MYSQL_ALIASES), (DBMS.PGSQL, PGSQL_ALIASES), (DBMS.ORACLE, ORACLE_ALIASES), (DBMS.SQLITE, SQLITE_ALIASES), (DBMS.ACCESS, ACCESS_ALIASES), (DBMS.FIREBIRD, FIREBIRD_ALIASES), (DBMS.MAXDB, MAXDB_ALIASES), (DBMS.SYBASE, SYBASE_ALIASES), (DBMS.DB2, DB2_ALIASES), (DBMS.HSQLDB, HSQLDB_ALIASES), (DBMS.H2, H2_ALIASES), (DBMS.INFORMIX, INFORMIX_ALIASES))
+DBMS_ALIASES = ((DBMS.MSSQL, MSSQL_ALIASES), (DBMS.MYSQL, MYSQL_ALIASES), (DBMS.PGSQL, PGSQL_ALIASES), (DBMS.ORACLE, ORACLE_ALIASES), (DBMS.SQLITE, SQLITE_ALIASES), (DBMS.ACCESS, ACCESS_ALIASES), (DBMS.FIREBIRD, FIREBIRD_ALIASES), (DBMS.MAXDB, MAXDB_ALIASES), (DBMS.SYBASE, SYBASE_ALIASES), (DBMS.DB2, DB2_ALIASES), (DBMS.HSQLDB, HSQLDB_ALIASES), (DBMS.H2, H2_ALIASES), (DBMS.INFORMIX, INFORMIX_ALIASES), (DBMS.MONETDB, MONETDB_ALIASES), (DBMS.DERBY, DERBY_ALIASES), (DBMS.VERTICA, VERTICA_ALIASES), (DBMS.MCKOI, MCKOI_ALIASES), (DBMS.PRESTO, PRESTO_ALIASES), (DBMS.ALTIBASE, ALTIBASE_ALIASES), (DBMS.MIMERSQL, MIMERSQL_ALIASES), (DBMS.CRATEDB, CRATEDB_ALIASES), (DBMS.CUBRID, CUBRID_ALIASES), (DBMS.CACHE, CACHE_ALIASES), (DBMS.EXTREMEDB, EXTREMEDB_ALIASES), (DBMS.FRONTBASE, FRONTBASE_ALIASES))
 
 USER_AGENT_ALIASES = ("ua", "useragent", "user-agent")
 REFERER_ALIASES = ("ref", "referer", "referrer")
 HOST_ALIASES = ("host",)
 
+# DBMSes with upper case identifiers
+UPPER_CASE_DBMSES = set((DBMS.ORACLE, DBMS.DB2, DBMS.FIREBIRD, DBMS.HSQLDB, DBMS.MAXDB, DBMS.H2, DBMS.DERBY, DBMS.ALTIBASE))
+
+# Default schemas to use (when unable to enumerate)
 H2_DEFAULT_SCHEMA = HSQLDB_DEFAULT_SCHEMA = "PUBLIC"
+VERTICA_DEFAULT_SCHEMA = "public"
+MCKOI_DEFAULT_SCHEMA = "APP"
+CACHE_DEFAULT_SCHEMA = "SQLUser"
+
+# DBMSes where OFFSET mechanism starts from 1
+PLUS_ONE_DBMSES = set((DBMS.ORACLE, DBMS.DB2, DBMS.ALTIBASE, DBMS.MSSQL, DBMS.CACHE))
 
 # Names that can't be used to name files on Windows OS
 WINDOWS_RESERVED_NAMES = ("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9")
@@ -333,6 +380,9 @@ BLANK = "<blank>"
 # String representation for current database
 CURRENT_DB = "CD"
 
+# String representation for current user
+CURRENT_USER = "CU"
+
 # Name of SQLite file used for storing session data
 SESSION_SQLITE_FILE = "session.sqlite"
 
@@ -357,7 +407,10 @@ ERROR_PARSING_REGEXES = (
 META_CHARSET_REGEX = r'(?si)<head>.*<meta[^>]+charset="?(?P<result>[^"> ]+).*</head>'
 
 # Regular expression used for parsing refresh info from meta html headers
-META_REFRESH_REGEX = r'(?si)<head>(?!.*?<noscript.*?</head).*?<meta http-equiv="?refresh"?[^>]+content="?[^">]+url=["\']?(?P<result>[^\'">]+).*</head>'
+META_REFRESH_REGEX = r'(?i)<meta http-equiv="?refresh"?[^>]+content="?[^">]+;\s*(url=)?["\']?(?P<result>[^\'">]+)'
+
+# Regular expression used for parsing Javascript redirect request
+JAVASCRIPT_HREF_REGEX = r'<script>\s*(\w+\.)?location\.href\s*=["\'](?P<result>[^"\']+)'
 
 # Regular expression used for parsing empty fields in tested form data
 EMPTY_FORM_FIELDS_REGEX = r'(&|\A)(?P<result>[^=]+=(&|\Z))'
@@ -375,7 +428,7 @@ WEBSCARAB_SPLITTER = "### Conversation"
 BURP_REQUEST_REGEX = r"={10,}\s+([A-Z]{3,} .+?)\s+={10,}"
 
 # Regex used for parsing XML Burp saved history items
-BURP_XML_HISTORY_REGEX = r'<port>(\d+)</port>.+?<request base64="true"><!\[CDATA\[([^]]+)'
+BURP_XML_HISTORY_REGEX = r'<port>(\d+)</port>.*?<request base64="true"><!\[CDATA\[([^]]+)'
 
 # Encoding used for Unicode data
 UNICODE_ENCODING = "utf8"
@@ -409,6 +462,9 @@ CANDIDATE_SENTENCE_MIN_LENGTH = 10
 
 # Character used for marking injectable position inside provided data
 CUSTOM_INJECTION_MARK_CHAR = '*'
+
+# Wildcard value that can be used in option --ignore-code
+IGNORE_CODE_WILDCARD = '*'
 
 # Other way to declare injection position
 INJECT_HERE_REGEX = r"(?i)%INJECT[_ ]?HERE%"
@@ -473,6 +529,9 @@ GOOGLE_ANALYTICS_COOKIE_PREFIX = "__UTM"
 # Prefix for configuration overriding environment variables
 SQLMAP_ENVIRONMENT_PREFIX = "SQLMAP_"
 
+# General OS environment variables that can be used for setting proxy address
+PROXY_ENVIRONMENT_VARIABLES = ("all_proxy", "ALL_PROXY", "http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY")
+
 # Turn off resume console info to avoid potential slowdowns
 TURN_OFF_RESUME_INFO_LIMIT = 20
 
@@ -521,6 +580,9 @@ HTML_TITLE_REGEX = r"<title>(?P<result>[^<]+)</title>"
 # Table used for Base64 conversion in WordPress hash cracking routine
 ITOA64 = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
+# Options/switches to be ignored in command-line parsing (e.g. those passed from Firefox)
+IGNORED_OPTIONS = ("--compressed",)
+
 # Chars used to quickly distinguish if the user provided tainted parameter values
 DUMMY_SQL_INJECTION_CHARS = ";()'"
 
@@ -548,11 +610,11 @@ LAST_UPDATE_NAGGING_DAYS = 60
 # Minimum non-writing chars (e.g. ['"-:/]) ratio in case of parsed error messages
 MIN_ERROR_PARSING_NON_WRITING_RATIO = 0.05
 
-# Generic address for checking the Internet connection while using switch --check-internet
-CHECK_INTERNET_ADDRESS = "https://ipinfo.io/"
+# Generic address for checking the Internet connection while using switch --check-internet (Note: https version does not work for Python < 2.7.9)
+CHECK_INTERNET_ADDRESS = "http://ipinfo.io/json"
 
 # Value to look for in response to CHECK_INTERNET_ADDRESS
-CHECK_INTERNET_VALUE = "IP Address Details"
+CHECK_INTERNET_VALUE = '"ip":'
 
 # Payload used for checking of existence of WAF/IPS (dummier the better)
 IPS_WAF_CHECK_PAYLOAD = "AND 1=1 UNION ALL SELECT 1,NULL,'<script>alert(\"XSS\")</script>',table_name FROM information_schema.tables WHERE 2>1--/**/; EXEC xp_cmdshell('cat ../../../etc/passwd')#"
@@ -590,6 +652,9 @@ PARSE_HEADERS_LIMIT = 3
 
 # Step used in ORDER BY technique used for finding the right number of columns in UNION query injections
 ORDER_BY_STEP = 10
+
+# Maximum value used in ORDER BY technique used for finding the right number of columns in UNION query injections
+ORDER_BY_MAX = 1000
 
 # Maximum number of times for revalidation of a character in inference (as required)
 MAX_REVALIDATION_STEPS = 5
@@ -643,7 +708,7 @@ LARGE_OUTPUT_THRESHOLD = 1024 ** 2
 SLOW_ORDER_COUNT_THRESHOLD = 10000
 
 # Give up on hash recognition if nothing was found in first given number of rows
-HASH_RECOGNITION_QUIT_THRESHOLD = 10000
+HASH_RECOGNITION_QUIT_THRESHOLD = 1000
 
 # Regular expression used for automatic hex conversion and hash cracking of (RAW) binary column values
 HASH_BINARY_COLUMNS_REGEX = r"(?i)pass|psw|hash"
@@ -703,7 +768,7 @@ VALID_TIME_CHARS_RUN_THRESHOLD = 100
 CHECK_ZERO_COLUMNS_THRESHOLD = 10
 
 # Boldify all logger messages containing these "patterns"
-BOLD_PATTERNS = ("' injectable", "provided empty", "leftover chars", "might be injectable", "' is vulnerable", "is not injectable", "does not seem to be", "test failed", "test passed", "live test final result", "test shows that", "the back-end DBMS is", "created Github", "blocked by the target server", "protection is involved", "CAPTCHA", "specific response", "NULL connection is supported", "PASSED", "FAILED", "for more than")
+BOLD_PATTERNS = ("' injectable", "provided empty", "leftover chars", "might be injectable", "' is vulnerable", "is not injectable", "does not seem to be", "test failed", "test passed", "live test final result", "test shows that", "the back-end DBMS is", "created Github", "blocked by the target server", "protection is involved", "CAPTCHA", "specific response", "NULL connection is supported", "PASSED", "FAILED", "for more than", "connection to ")
 
 # TLDs used in randomization of email-alike parameter values
 RANDOMIZATION_TLDS = ("com", "net", "ru", "org", "de", "jp", "cn", "fr", "it", "pl", "tv", "edu", "in", "ir", "es", "me", "info", "gr", "gov", "ca", "co", "se", "cz", "to", "vn", "nl", "cc", "az", "hu", "ua", "be", "no", "biz", "io", "ch", "ro", "sk", "eu", "us", "tw", "pt", "fi", "at", "lt", "kz", "cl", "hr", "pk", "lv", "la", "pe")
@@ -718,7 +783,7 @@ MAX_HELP_OPTION_LENGTH = 18
 MAX_CONNECT_RETRIES = 100
 
 # Strings for detecting formatting errors
-FORMAT_EXCEPTION_STRINGS = ("Type mismatch", "Error converting", "Please enter a", "Conversion failed", "String or binary data would be truncated", "Failed to convert", "unable to interpret text value", "Input string was not in a correct format", "System.FormatException", "java.lang.NumberFormatException", "ValueError: invalid literal", "TypeMismatchException", "CF_SQL_INTEGER", "CF_SQL_NUMERIC", " for CFSQLTYPE ", "cfqueryparam cfsqltype", "InvalidParamTypeException", "Invalid parameter type", "Attribute validation error for tag", "is not of type numeric", "<cfif Not IsNumeric(", "invalid input syntax for integer", "invalid input syntax for type", "invalid number", "character to number conversion error", "unable to interpret text value", "String was not recognized as a valid", "Convert.ToInt", "cannot be converted to a ", "InvalidDataException")
+FORMAT_EXCEPTION_STRINGS = ("Type mismatch", "Error converting", "Please enter a", "Conversion failed", "String or binary data would be truncated", "Failed to convert", "unable to interpret text value", "Input string was not in a correct format", "System.FormatException", "java.lang.NumberFormatException", "ValueError: invalid literal", "TypeMismatchException", "CF_SQL_INTEGER", "CF_SQL_NUMERIC", " for CFSQLTYPE ", "cfqueryparam cfsqltype", "InvalidParamTypeException", "Invalid parameter type", "Attribute validation error for tag", "is not of type numeric", "<cfif Not IsNumeric(", "invalid input syntax for integer", "invalid input syntax for type", "invalid number", "character to number conversion error", "unable to interpret text value", "String was not recognized as a valid", "Convert.ToInt", "cannot be converted to a ", "InvalidDataException", "Arguments are of the wrong type")
 
 # Regular expression used for extracting ASP.NET view state values
 VIEWSTATE_REGEX = r'(?i)(?P<name>__VIEWSTATE[^"]*)[^>]+value="(?P<result>[^"]+)'
@@ -748,7 +813,7 @@ INVALID_UNICODE_CHAR_FORMAT = r"\x%02x"
 XML_RECOGNITION_REGEX = r"(?s)\A\s*<[^>]+>(.+>)?\s*\Z"
 
 # Regular expression used for detecting JSON POST data
-JSON_RECOGNITION_REGEX = r'(?s)\A(\s*\[)*\s*\{.*"[^"]+"\s*:\s*("[^"]*"|\d+|true|false|null).*\}\s*(\]\s*)*\Z'
+JSON_RECOGNITION_REGEX = r'(?s)\A(\s*\[)*\s*\{.*"[^"]+"\s*:\s*("[^"]*"|\d+|true|false|null|\[).*\}\s*(\]\s*)*\Z'
 
 # Regular expression used for detecting JSON-like POST data
 JSON_LIKE_RECOGNITION_REGEX = r"(?s)\A(\s*\[)*\s*\{.*'[^']+'\s*:\s*('[^']+'|\d+).*\}\s*(\]\s*)*\Z"
@@ -852,14 +917,24 @@ for key, value in os.environ.items():
     if key.upper().startswith("%s_" % SQLMAP_ENVIRONMENT_PREFIX):
         _ = key[len(SQLMAP_ENVIRONMENT_PREFIX) + 1:].upper()
         if _ in globals():
-            globals()[_] = value
+            original = globals()[_]
+            if isinstance(original, int):
+                try:
+                    globals()[_] = int(value)
+                except ValueError:
+                    pass
+            elif isinstance(original, bool):
+                globals()[_] = value.lower() in ('1', 'true')
+            elif isinstance(original, (list, tuple)):
+                globals()[_] = [__.strip() for __ in _.split(',')]
+            else:
+                globals()[_] = value
 
 # Installing "reversible" unicode (decoding) error handler
 def _reversible(ex):
-    if isinstance(ex, UnicodeDecodeError):
-        if INVALID_UNICODE_PRIVATE_AREA:
-            return (u"".join(_unichr(int('000f00%2x' % (_ if isinstance(_, int) else ord(_)), 16)) for _ in ex.object[ex.start:ex.end]), ex.end)
-        else:
-            return (u"".join(INVALID_UNICODE_CHAR_FORMAT % (_ if isinstance(_, int) else ord(_)) for _ in ex.object[ex.start:ex.end]), ex.end)
+    if INVALID_UNICODE_PRIVATE_AREA:
+        return (u"".join(_unichr(int('000f00%2x' % (_ if isinstance(_, int) else ord(_)), 16)) for _ in ex.object[ex.start:ex.end]), ex.end)
+    else:
+        return (u"".join(INVALID_UNICODE_CHAR_FORMAT % (_ if isinstance(_, int) else ord(_)) for _ in ex.object[ex.start:ex.end]), ex.end)
 
 codecs.register_error("reversible", _reversible)

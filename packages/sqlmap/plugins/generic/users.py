@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -36,9 +36,12 @@ from lib.core.dicts import PGSQL_PRIVS
 from lib.core.enums import CHARSET_TYPE
 from lib.core.enums import DBMS
 from lib.core.enums import EXPECTED
+from lib.core.enums import FORK
 from lib.core.enums import PAYLOAD
 from lib.core.exception import SqlmapNoneDataException
 from lib.core.exception import SqlmapUserQuitException
+from lib.core.settings import CURRENT_USER
+from lib.core.settings import PLUS_ONE_DBMSES
 from lib.core.threads import getCurrentThreadData
 from lib.request import inject
 from lib.utils.hash import attackCachedUsersPasswords
@@ -74,16 +77,22 @@ class Users(object):
         infoMsg = "testing if current user is DBA"
         logger.info(infoMsg)
 
+        query = None
+
         if Backend.isDbms(DBMS.MYSQL):
             self.getCurrentUser()
-            query = queries[Backend.getIdentifiedDbms()].is_dba.query % (kb.data.currentUser.split("@")[0] if kb.data.currentUser else None)
+            if Backend.isFork(FORK.DRIZZLE):
+                kb.data.isDba = "root" in (kb.data.currentUser or "")
+            elif kb.data.currentUser:
+                query = queries[Backend.getIdentifiedDbms()].is_dba.query % kb.data.currentUser.split("@")[0]
         elif Backend.getIdentifiedDbms() in (DBMS.MSSQL, DBMS.SYBASE) and user is not None:
             query = queries[Backend.getIdentifiedDbms()].is_dba.query2 % user
         else:
             query = queries[Backend.getIdentifiedDbms()].is_dba.query
 
-        query = agent.forgeCaseStatement(query)
-        kb.data.isDba = inject.checkBooleanExpression(query) or False
+        if query:
+            query = agent.forgeCaseStatement(query)
+            kb.data.isDba = inject.checkBooleanExpression(query) or False
 
         return kb.data.isDba
 
@@ -97,10 +106,13 @@ class Users(object):
         condition |= (Backend.isDbms(DBMS.MYSQL) and not kb.data.has_information_schema)
 
         if any(isTechniqueAvailable(_) for _ in (PAYLOAD.TECHNIQUE.UNION, PAYLOAD.TECHNIQUE.ERROR, PAYLOAD.TECHNIQUE.QUERY)) or conf.direct:
-            if condition:
+            if Backend.isFork(FORK.DRIZZLE):
+                query = rootQuery.inband.query3
+            elif condition:
                 query = rootQuery.inband.query2
             else:
                 query = rootQuery.inband.query
+
             values = inject.getValue(query, blind=False, time=False)
 
             if not isNoneValue(values):
@@ -114,7 +126,9 @@ class Users(object):
             infoMsg = "fetching number of database users"
             logger.info(infoMsg)
 
-            if condition:
+            if Backend.isFork(FORK.DRIZZLE):
+                query = rootQuery.blind.count3
+            elif condition:
                 query = rootQuery.blind.count2
             else:
                 query = rootQuery.blind.count
@@ -127,16 +141,19 @@ class Users(object):
                 errMsg = "unable to retrieve the number of database users"
                 raise SqlmapNoneDataException(errMsg)
 
-            plusOne = Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2)
+            plusOne = Backend.getIdentifiedDbms() in PLUS_ONE_DBMSES
             indexRange = getLimitRange(count, plusOne=plusOne)
 
             for index in indexRange:
                 if Backend.getIdentifiedDbms() in (DBMS.SYBASE, DBMS.MAXDB):
                     query = rootQuery.blind.query % (kb.data.cachedUsers[-1] if kb.data.cachedUsers else " ")
+                elif Backend.isFork(FORK.DRIZZLE):
+                    query = rootQuery.blind.query3 % index
                 elif condition:
                     query = rootQuery.blind.query2 % index
                 else:
                     query = rootQuery.blind.query % index
+
                 user = unArrayizeValue(inject.getValue(query, union=False, error=False))
 
                 if user:
@@ -153,7 +170,7 @@ class Users(object):
 
         rootQuery = queries[Backend.getIdentifiedDbms()].passwords
 
-        if conf.user == "CU":
+        if conf.user == CURRENT_USER:
             infoMsg += " for current user"
             conf.user = self.getCurrentUser()
 
@@ -292,7 +309,7 @@ class Users(object):
 
                     passwords = []
 
-                    plusOne = Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2)
+                    plusOne = Backend.getIdentifiedDbms() in PLUS_ONE_DBMSES
                     indexRange = getLimitRange(count, plusOne=plusOne)
 
                     for index in indexRange:
@@ -334,9 +351,7 @@ class Users(object):
 
         if not kb.data.cachedUsersPasswords:
             errMsg = "unable to retrieve the password hashes for the "
-            errMsg += "database users (probably because the DBMS "
-            errMsg += "current user has no read privileges over the relevant "
-            errMsg += "system database table(s))"
+            errMsg += "database users"
             logger.error(errMsg)
         else:
             for user in kb.data.cachedUsersPasswords:
@@ -362,7 +377,7 @@ class Users(object):
 
         rootQuery = queries[Backend.getIdentifiedDbms()].privileges
 
-        if conf.user == "CU":
+        if conf.user == CURRENT_USER:
             infoMsg += " for current user"
             conf.user = self.getCurrentUser()
 
@@ -410,7 +425,7 @@ class Users(object):
             values = inject.getValue(query, blind=False, time=False)
 
             if not values and Backend.isDbms(DBMS.ORACLE) and not query2:
-                infoMsg = "trying with table USER_SYS_PRIVS"
+                infoMsg = "trying with table 'USER_SYS_PRIVS'"
                 logger.info(infoMsg)
 
                 return self.getPrivileges(query2=True)
@@ -435,18 +450,18 @@ class Users(object):
                             # In PostgreSQL we get 1 if the privilege is
                             # True, 0 otherwise
                             if Backend.isDbms(DBMS.PGSQL) and getUnicode(privilege).isdigit():
-                                if int(privilege) == 1:
+                                if int(privilege) == 1 and count in PGSQL_PRIVS:
                                     privileges.add(PGSQL_PRIVS[count])
 
                             # In MySQL >= 5.0 and Oracle we get the list
                             # of privileges as string
-                            elif Backend.isDbms(DBMS.ORACLE) or (Backend.isDbms(DBMS.MYSQL) and kb.data.has_information_schema):
+                            elif Backend.isDbms(DBMS.ORACLE) or (Backend.isDbms(DBMS.MYSQL) and kb.data.has_information_schema) or Backend.getIdentifiedDbms() in (DBMS.VERTICA, DBMS.MIMERSQL, DBMS.CUBRID):
                                 privileges.add(privilege)
 
                             # In MySQL < 5.0 we get Y if the privilege is
                             # True, N otherwise
                             elif Backend.isDbms(DBMS.MYSQL) and not kb.data.has_information_schema:
-                                if privilege.upper() == "Y":
+                                if privilege.upper() == 'Y':
                                     privileges.add(MYSQL_PRIVS[count])
 
                             # In Firebird we get one letter for each privilege
@@ -465,7 +480,7 @@ class Users(object):
                                     i = 1
 
                                     for priv in privs:
-                                        if priv.upper() in ("Y", "G"):
+                                        if priv.upper() in ('Y', 'G'):
                                             for position, db2Priv in DB2_PRIVS.items():
                                                 if position == i:
                                                     privilege += ", " + db2Priv
@@ -525,7 +540,7 @@ class Users(object):
 
                     if not isNumPosStrValue(count):
                         if not retrievedUsers and Backend.isDbms(DBMS.ORACLE) and not query2:
-                            infoMsg = "trying with table USER_SYS_PRIVS"
+                            infoMsg = "trying with table 'USER_SYS_PRIVS'"
                             logger.info(infoMsg)
 
                             return self.getPrivileges(query2=True)
@@ -540,7 +555,7 @@ class Users(object):
 
                 privileges = set()
 
-                plusOne = Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2)
+                plusOne = Backend.getIdentifiedDbms() in PLUS_ONE_DBMSES
                 indexRange = getLimitRange(count, plusOne=plusOne)
 
                 for index in indexRange:
@@ -570,16 +585,14 @@ class Users(object):
                         i = 1
 
                         for priv in privs:
-                            if priv.isdigit() and int(priv) == 1:
-                                for position, pgsqlPriv in PGSQL_PRIVS.items():
-                                    if position == i:
-                                        privileges.add(pgsqlPriv)
+                            if priv.isdigit() and int(priv) == 1 and i in PGSQL_PRIVS:
+                                privileges.add(PGSQL_PRIVS[i])
 
                             i += 1
 
                     # In MySQL >= 5.0 and Oracle we get the list
                     # of privileges as string
-                    elif Backend.isDbms(DBMS.ORACLE) or (Backend.isDbms(DBMS.MYSQL) and kb.data.has_information_schema):
+                    elif Backend.isDbms(DBMS.ORACLE) or (Backend.isDbms(DBMS.MYSQL) and kb.data.has_information_schema) or Backend.getIdentifiedDbms() in (DBMS.VERTICA, DBMS.MIMERSQL, DBMS.CUBRID):
                         privileges.add(privilege)
 
                     # In MySQL < 5.0 we get Y if the privilege is
@@ -599,7 +612,8 @@ class Users(object):
 
                     # In Firebird we get one letter for each privilege
                     elif Backend.isDbms(DBMS.FIREBIRD):
-                        privileges.add(FIREBIRD_PRIVS[privilege.strip()])
+                        if privilege.strip() in FIREBIRD_PRIVS:
+                            privileges.add(FIREBIRD_PRIVS[privilege.strip()])
 
                     # In Informix we get one letter for the highest privilege
                     elif Backend.isDbms(DBMS.INFORMIX):

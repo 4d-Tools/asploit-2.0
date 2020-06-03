@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -68,7 +68,7 @@ class HashDB(object):
 
     @staticmethod
     def hashKey(key):
-        key = getBytes(key if isinstance(key, six.text_type) else repr(key))
+        key = getBytes(key if isinstance(key, six.text_type) else repr(key), errors="xmlcharrefreplace")
         retVal = int(hashlib.md5(key).hexdigest(), 16) & 0x7fffffffffffffff  # Reference: http://stackoverflow.com/a/4448400
         return retVal
 

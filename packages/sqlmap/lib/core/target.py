@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+Copyright (c) 2006-2020 sqlmap developers (http://sqlmap.org/)
 See the file 'LICENSE' for copying permission
 """
 
@@ -106,7 +106,7 @@ def _setRequestParams():
         conf.data = ""
 
     if conf.data is not None:
-        conf.method = HTTPMETHOD.POST if not conf.method or conf.method == HTTPMETHOD.GET else conf.method
+        conf.method = conf.method or HTTPMETHOD.POST
 
         def process(match, repl):
             retVal = match.group(0)
@@ -125,8 +125,8 @@ def _setRequestParams():
             return retVal
 
         if kb.processUserMarks is None and kb.customInjectionMark in conf.data:
-            message = "custom injection marker ('%s') found in option " % kb.customInjectionMark
-            message += "'--data'. Do you want to process it? [Y/n/q] "
+            message = "custom injection marker ('%s') found in %s " % (kb.customInjectionMark, conf.method)
+            message += "body. Do you want to process it? [Y/n/q] "
             choice = readInput(message, default='Y').upper()
 
             if choice == 'Q':
@@ -138,7 +138,7 @@ def _setRequestParams():
                     kb.testOnlyCustom = True
 
         if re.search(JSON_RECOGNITION_REGEX, conf.data):
-            message = "JSON data found in %s data. " % conf.method
+            message = "JSON data found in %s body. " % conf.method
             message += "Do you want to process it? [Y/n/q] "
             choice = readInput(message, default='Y').upper()
 
@@ -151,17 +151,18 @@ def _setRequestParams():
                     conf.data = re.sub(r'("(?P<name>[^"]+)"\s*:\s*".+?)"(?<!\\")', functools.partial(process, repl=r'\g<1>%s"' % kb.customInjectionMark), conf.data)
                     conf.data = re.sub(r'("(?P<name>[^"]+)"\s*:\s*)(-?\d[\d\.]*)\b', functools.partial(process, repl=r'\g<1>\g<3>%s' % kb.customInjectionMark), conf.data)
                     conf.data = re.sub(r'("(?P<name>[^"]+)"\s*:\s*)((true|false|null))\b', functools.partial(process, repl=r'\g<1>\g<3>%s' % kb.customInjectionMark), conf.data)
-                    match = re.search(r'(?P<name>[^"]+)"\s*:\s*\[([^\]]+)\]', conf.data)
-                    if match and not (conf.testParameter and match.group("name") not in conf.testParameter):
-                        _ = match.group(2)
-                        _ = re.sub(r'("[^"]+)"', r'\g<1>%s"' % kb.customInjectionMark, _)
-                        _ = re.sub(r'(\A|,|\s+)(-?\d[\d\.]*\b)', r'\g<0>%s' % kb.customInjectionMark, _)
-                        conf.data = conf.data.replace(match.group(0), match.group(0).replace(match.group(2), _))
+                    for match in re.finditer(r'(?P<name>[^"]+)"\s*:\s*\[([^\]]+)\]', conf.data):
+                        if not (conf.testParameter and match.group("name") not in conf.testParameter):
+                            _ = match.group(2)
+                            if kb.customInjectionMark not in _:  # Note: only for unprocessed (simple) forms - i.e. non-associative arrays (e.g. [1,2,3])
+                                _ = re.sub(r'("[^"]+)"', r'\g<1>%s"' % kb.customInjectionMark, _)
+                                _ = re.sub(r'(\A|,|\s+)(-?\d[\d\.]*\b)', r'\g<0>%s' % kb.customInjectionMark, _)
+                                conf.data = conf.data.replace(match.group(0), match.group(0).replace(match.group(2), _))
 
                 kb.postHint = POST_HINT.JSON
 
         elif re.search(JSON_LIKE_RECOGNITION_REGEX, conf.data):
-            message = "JSON-like data found in %s data. " % conf.method
+            message = "JSON-like data found in %s body. " % conf.method
             message += "Do you want to process it? [Y/n/q] "
             choice = readInput(message, default='Y').upper()
 
@@ -177,7 +178,7 @@ def _setRequestParams():
                 kb.postHint = POST_HINT.JSON_LIKE
 
         elif re.search(ARRAY_LIKE_RECOGNITION_REGEX, conf.data):
-            message = "Array-like data found in %s data. " % conf.method
+            message = "Array-like data found in %s body. " % conf.method
             message += "Do you want to process it? [Y/n/q] "
             choice = readInput(message, default='Y').upper()
 
@@ -191,7 +192,7 @@ def _setRequestParams():
                 kb.postHint = POST_HINT.ARRAY_LIKE
 
         elif re.search(XML_RECOGNITION_REGEX, conf.data):
-            message = "SOAP/XML data found in %s data. " % conf.method
+            message = "SOAP/XML data found in %s body. " % conf.method
             message += "Do you want to process it? [Y/n/q] "
             choice = readInput(message, default='Y').upper()
 
@@ -206,7 +207,7 @@ def _setRequestParams():
                 kb.postHint = POST_HINT.SOAP if "soap" in conf.data.lower() else POST_HINT.XML
 
         elif re.search(MULTIPART_RECOGNITION_REGEX, conf.data):
-            message = "Multipart-like data found in %s data. " % conf.method
+            message = "Multipart-like data found in %s body. " % conf.method
             message += "Do you want to process it? [Y/n/q] "
             choice = readInput(message, default='Y').upper()
 
@@ -256,6 +257,9 @@ def _setRequestParams():
             kb.processUserMarks = True
 
     for place, value in ((PLACE.URI, conf.url), (PLACE.CUSTOM_POST, conf.data), (PLACE.CUSTOM_HEADER, str(conf.httpHeaders))):
+        if place == PLACE.CUSTOM_HEADER and any((conf.forms, conf.crawlDepth)):
+            continue
+
         _ = re.sub(PROBLEMATIC_CUSTOM_INJECTION_PATTERNS, "", value or "") if place == PLACE.CUSTOM_HEADER else value or ""
         if kb.customInjectionMark in _:
             if kb.processUserMarks is None:
@@ -397,7 +401,7 @@ def _setRequestParams():
         raise SqlmapGenericException(errMsg)
 
     if conf.csrfToken:
-        if not any(re.search(conf.csrfToken, ' '.join(_), re.I) for _ in (conf.paramDict.get(PLACE.GET, {}), conf.paramDict.get(PLACE.POST, {}))) and not re.search(r"\b%s\b" % conf.csrfToken, conf.data or "") and conf.csrfToken not in set(_[0].lower() for _ in conf.httpHeaders) and conf.csrfToken not in conf.paramDict.get(PLACE.COOKIE, {}):
+        if not any(re.search(conf.csrfToken, ' '.join(_), re.I) for _ in (conf.paramDict.get(PLACE.GET, {}), conf.paramDict.get(PLACE.POST, {}), conf.paramDict.get(PLACE.COOKIE, {}))) and not re.search(r"\b%s\b" % conf.csrfToken, conf.data or "") and conf.csrfToken not in set(_[0].lower() for _ in conf.httpHeaders) and conf.csrfToken not in conf.paramDict.get(PLACE.COOKIE, {}):
             errMsg = "anti-CSRF token parameter '%s' not " % conf.csrfToken._original
             errMsg += "found in provided GET, POST, Cookie or header values"
             raise SqlmapGenericException(errMsg)
@@ -487,7 +491,7 @@ def _resumeDBMS():
 
     dbms = value.lower()
     dbmsVersion = [UNKNOWN_DBMS_VERSION]
-    _ = "(%s)" % ("|".join([alias for alias in SUPPORTED_DBMS]))
+    _ = "(%s)" % ('|'.join(SUPPORTED_DBMS))
     _ = re.search(r"\A%s (.*)" % _, dbms, re.I)
 
     if _:
@@ -560,16 +564,18 @@ def _setResultsFile():
         return
 
     if not conf.resultsFP:
-        conf.resultsFilename = os.path.join(paths.SQLMAP_OUTPUT_PATH, time.strftime(RESULTS_FILE_FORMAT).lower())
+        conf.resultsFile = conf.resultsFile or os.path.join(paths.SQLMAP_OUTPUT_PATH, time.strftime(RESULTS_FILE_FORMAT).lower())
+        found = os.path.exists(conf.resultsFile)
+
         try:
-            conf.resultsFP = openFile(conf.resultsFilename, "a", UNICODE_ENCODING, buffering=0)
+            conf.resultsFP = openFile(conf.resultsFile, "a", UNICODE_ENCODING, buffering=0)
         except (OSError, IOError) as ex:
             try:
-                warnMsg = "unable to create results file '%s' ('%s'). " % (conf.resultsFilename, getUnicode(ex))
-                handle, conf.resultsFilename = tempfile.mkstemp(prefix=MKSTEMP_PREFIX.RESULTS, suffix=".csv")
+                warnMsg = "unable to create results file '%s' ('%s'). " % (conf.resultsFile, getUnicode(ex))
+                handle, conf.resultsFile = tempfile.mkstemp(prefix=MKSTEMP_PREFIX.RESULTS, suffix=".csv")
                 os.close(handle)
-                conf.resultsFP = openFile(conf.resultsFilename, "w+", UNICODE_ENCODING, buffering=0)
-                warnMsg += "Using temporary file '%s' instead" % conf.resultsFilename
+                conf.resultsFP = openFile(conf.resultsFile, "w+", UNICODE_ENCODING, buffering=0)
+                warnMsg += "Using temporary file '%s' instead" % conf.resultsFile
                 logger.warn(warnMsg)
             except IOError as _:
                 errMsg = "unable to write to the temporary directory ('%s'). " % _
@@ -578,9 +584,10 @@ def _setResultsFile():
                 errMsg += "create temporary files and/or directories"
                 raise SqlmapSystemException(errMsg)
 
-        conf.resultsFP.writelines("Target URL,Place,Parameter,Technique(s),Note(s)%s" % os.linesep)
+        if not found:
+            conf.resultsFP.writelines("Target URL,Place,Parameter,Technique(s),Note(s)%s" % os.linesep)
 
-        logger.info("using '%s' as the CSV results file in multiple targets mode" % conf.resultsFilename)
+        logger.info("using '%s' as the CSV results file in multiple targets mode" % conf.resultsFile)
 
 def _createFilesDir():
     """
