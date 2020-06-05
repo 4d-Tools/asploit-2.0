@@ -8,7 +8,7 @@ os.system("clear");
 os.system("toilet -f mono12 a-sploit 2.0");
 
 print("1.Phishing Attack");
-print("2.Option Coming Soon");
+print("2.Weevely Framework");
 print("3.sql injection");
 print("4.Credits");
 print("5.Port Forwarding");
@@ -24,9 +24,7 @@ if choice ==1:
 
 
 if choice ==2:
-  os.system("cd main")
-  os.system("chmod +x spoofer.py")
-  os.system("python2 spoofer.py");
+ os.system("cat packages/where-is-weevely.doc");
 
 if choice ==3:
    os.system("cd packages && chmod +x run.sh && bash run.sh");
